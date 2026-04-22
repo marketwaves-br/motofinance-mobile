@@ -52,63 +52,83 @@ export default function SettingsScreen() {
       <Text style={[styles.headerTitle, { color: colors.text }]}>Ajustes</Text>
       <Text style={[styles.subtitle, { color: colors.muted }]}>Configurações do app</Text>
 
-      {/* ── Gerenciar ─────────────────────────────────────────── */}
+      {/* ── Perfil ────────────────────────────────────────────── */}
       <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.sectionLabel, { color: colors.muted }]}>PERFIL</Text>
+      </View>
+
+      <View style={styles.menuWrapper}>
+        <Link href="/(modals)/manage-profile" asChild>
+          <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.menuLeft}>
+              <Ionicons name="person" size={22} color={colors.primary} style={{ marginRight: 14 }} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Meus Dados</Text>
+            </View>
+          </TouchableOpacity>
+        </Link>
+      </View>
+
+      {/* ── Gerenciar ─────────────────────────────────────────── */}
+      <View style={[styles.sectionHeader, { borderBottomColor: colors.border, marginTop: spacing.xl }]}>
         <Text style={[styles.sectionLabel, { color: colors.muted }]}>GERENCIAR</Text>
       </View>
 
-      <Link href="/(modals)/manage-categories" asChild>
-        <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.menuLeft}>
-            <Ionicons name="pricetag" size={22} color={colors.expense} style={{ marginRight: 14 }} />
-            <Text style={[styles.menuText, { color: colors.text }]}>Categorias de Despesa</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.icon} />
-        </TouchableOpacity>
-      </Link>
+      <View style={styles.menuWrapper}>
+        <Link href="/(modals)/manage-categories" asChild>
+          <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.menuLeft}>
+              <Ionicons name="pricetag" size={22} color={colors.expense} style={{ marginRight: 14 }} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Categorias de Despesa</Text>
+            </View>
+          </TouchableOpacity>
+        </Link>
+      </View>
 
-      <Link href="/(modals)/manage-sources" asChild>
-        <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 10 }]}>
-          <View style={styles.menuLeft}>
-            <Ionicons name="business" size={22} color={colors.income} style={{ marginRight: 14 }} />
-            <Text style={[styles.menuText, { color: colors.text }]}>Fontes de Receita</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.icon} />
-        </TouchableOpacity>
-      </Link>
+      <View style={styles.menuWrapper}>
+        <Link href="/(modals)/manage-sources" asChild>
+          <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.menuLeft}>
+              <Ionicons name="business" size={22} color={colors.income} style={{ marginRight: 14 }} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Fontes de Receita</Text>
+            </View>
+          </TouchableOpacity>
+        </Link>
+      </View>
 
-      <Link href="/(modals)/manage-goals" asChild>
-        <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 10 }]}>
-          <View style={styles.menuLeft}>
-            <Ionicons name="trophy-outline" size={22} color={colors.primary} style={{ marginRight: 14 }} />
-            <Text style={[styles.menuText, { color: colors.text }]}>Metas Mensais</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.icon} />
-        </TouchableOpacity>
-      </Link>
+      <View style={styles.menuWrapper}>
+        <Link href="/(modals)/manage-goals" asChild>
+          <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.menuLeft}>
+              <Ionicons name="flag-outline" size={22} color={colors.primary} style={{ marginRight: 14 }} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Metas Mensais</Text>
+            </View>
+          </TouchableOpacity>
+        </Link>
+      </View>
 
       {/* ── Desenvolvedor ─────────────────────────────────────── */}
       <View style={[styles.sectionHeader, { borderBottomColor: colors.border, marginTop: spacing.xl }]}>
         <Text style={[styles.sectionLabel, { color: colors.muted }]}>DESENVOLVEDOR</Text>
       </View>
 
-      <TouchableOpacity
-        onPress={handleSeedData}
-        disabled={seeding}
-        style={[styles.menuItem, {
-          backgroundColor: colors.surface,
-          borderColor: seeding ? colors.border : '#E67E22',
-          opacity: seeding ? 0.6 : 1,
-        }]}
-      >
-        <View style={styles.menuLeft}>
-          <Ionicons name="flask-outline" size={22} color="#E67E22" style={{ marginRight: 14 }} />
-          <Text style={[styles.menuText, { color: colors.text }]}>
-            {seeding ? 'Gerando dados...' : 'Gerar Dados de Teste'}
-          </Text>
-        </View>
-        {!seeding && <Ionicons name="chevron-forward" size={20} color={colors.icon} />}
-      </TouchableOpacity>
+      <View style={styles.menuWrapper}>
+        <TouchableOpacity
+          onPress={handleSeedData}
+          disabled={seeding}
+          style={[styles.menuItem, {
+            backgroundColor: colors.surface,
+            borderColor: seeding ? colors.border : '#E67E22',
+            opacity: seeding ? 0.6 : 1,
+          }]}
+        >
+          <View style={styles.menuLeft}>
+            <Ionicons name="flask-outline" size={22} color="#E67E22" style={{ marginRight: 14 }} />
+            <Text style={[styles.menuText, { color: colors.text }]}>
+              {seeding ? 'Gerando dados...' : 'Gerar Dados de Teste'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
@@ -136,6 +156,9 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 10,
     borderWidth: 1,
+  },
+  menuWrapper: {
+    marginBottom: 16,
   },
   menuLeft: { flexDirection: 'row', alignItems: 'center' },
   menuText: { fontSize: 16 },

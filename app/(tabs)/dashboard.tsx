@@ -70,6 +70,13 @@ export default function DashboardScreen() {
     setRefreshing(false);
   };
 
+  const todayLabel = (() => {
+    const now = new Date();
+    const weekdays = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+    const months = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    return `${weekdays[now.getDay()]}, ${now.getDate()} de ${months[now.getMonth()]}`;
+  })();
+
   return (
     <ScrollView 
       style={[styles.container, { backgroundColor: colors.background }]} 
@@ -77,8 +84,12 @@ export default function DashboardScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
     >
       <View style={styles.header}>
-        <Text style={[styles.greeting, { color: colors.muted }]}>Resumo de Hoje,</Text>
-        <Text style={[styles.name, { color: colors.text }]}>{userName || 'Motorista Parceiro'}</Text>
+        <Text style={[styles.greeting, { color: colors.muted }]}>
+          Olá, <Text style={{ color: colors.text, fontWeight: 'bold' }}>{userName || 'Motorista Parceiro'}.</Text>
+        </Text>
+        <Text style={[styles.dateLabel, { color: colors.muted }]}>
+          Resultado do dia — {todayLabel}
+        </Text>
       </View>
 
       <AppCard style={styles.balanceCard}>
@@ -173,7 +184,8 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { marginTop: 20, marginBottom: 16 },
-  greeting: { fontSize: 15, fontWeight: '500' },
+  greeting: { fontSize: 18, fontWeight: '400' },
+  dateLabel: { fontSize: 13, fontWeight: '300', fontStyle: 'italic', marginTop: 4, letterSpacing: 0.1 },
   name: { fontSize: 24, fontWeight: 'bold', marginTop: 2 },
   balanceCard: { marginBottom: 12, alignItems: 'center', paddingVertical: 20 },
   cardTitle: { fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },

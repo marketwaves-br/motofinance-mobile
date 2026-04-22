@@ -612,33 +612,35 @@ export default function ReportsScreen() {
             {isMultiDay && dailyData.length > 1 && (
               <View style={[styles.section, { marginBottom: 24 }]}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Evolução Diária</Text>
-                {dailyData.map(day => {
-                  const [, month, dayNum] = day.dateKey.split('-');
-                  const label  = `${dayNum}/${month}`;
-                  const incPct = (day.incomeCents  / dailyMax) * 100;
-                  const expPct = (day.expenseCents / dailyMax) * 100;
-                  const net    = day.incomeCents - day.expenseCents;
-                  return (
-                    <View key={day.dateKey} style={[styles.dailyRow, { borderBottomColor: colors.border }]}>
-                      <Text style={[styles.dailyLabel, { color: colors.muted }]}>{label}</Text>
-                      <View style={styles.dailyBars}>
-                        {day.incomeCents > 0 && (
-                          <View style={[styles.dailyBarTrack, { marginBottom: 3 }]}>
-                            <View style={[styles.dailyBarFill, { width: `${incPct}%`, backgroundColor: colors.income }]} />
-                          </View>
-                        )}
-                        {day.expenseCents > 0 && (
-                          <View style={styles.dailyBarTrack}>
-                            <View style={[styles.dailyBarFill, { width: `${expPct}%`, backgroundColor: colors.expense }]} />
-                          </View>
-                        )}
+                <ScrollView nestedScrollEnabled style={{ maxHeight: 380 }}>
+                  {dailyData.map(day => {
+                    const [, month, dayNum] = day.dateKey.split('-');
+                    const label  = `${dayNum}/${month}`;
+                    const incPct = (day.incomeCents  / dailyMax) * 100;
+                    const expPct = (day.expenseCents / dailyMax) * 100;
+                    const net    = day.incomeCents - day.expenseCents;
+                    return (
+                      <View key={day.dateKey} style={[styles.dailyRow, { borderBottomColor: colors.border }]}>
+                        <Text style={[styles.dailyLabel, { color: colors.muted }]}>{label}</Text>
+                        <View style={styles.dailyBars}>
+                          {day.incomeCents > 0 && (
+                            <View style={[styles.dailyBarTrack, { marginBottom: 3 }]}>
+                              <View style={[styles.dailyBarFill, { width: `${incPct}%`, backgroundColor: colors.income }]} />
+                            </View>
+                          )}
+                          {day.expenseCents > 0 && (
+                            <View style={styles.dailyBarTrack}>
+                              <View style={[styles.dailyBarFill, { width: `${expPct}%`, backgroundColor: colors.expense }]} />
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.dailyNet, { color: net >= 0 ? colors.income : colors.expense }]}>
+                          {net >= 0 ? '+' : ''}{formatBRL(net)}
+                        </Text>
                       </View>
-                      <Text style={[styles.dailyNet, { color: net >= 0 ? colors.income : colors.expense }]}>
-                        {net >= 0 ? '+' : ''}{formatBRL(net)}
-                      </Text>
-                    </View>
-                  );
-                })}
+                    );
+                  })}
+                </ScrollView>
               </View>
             )}
 
