@@ -1,25 +1,93 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SectionList,
+  ScrollView,
   RefreshControl,
   Alert,
   TouchableOpacity,
 } from 'react-native';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { TransactionsRepository } from '@/infrastructure/repositories/TransactionsRepository';
 import { formatBRL } from '@/lib/formatters/currency';
 import type { UnifiedTransaction, TransactionSection } from '@/types/transaction';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type FilterType = 'all' | 'income' | 'expense';
+
+interface MonthSection {
+  monthKey: string;       // "2026-04"
+  title: string;          // "Abril 2026"
+  incomeCents: number;
+  expenseCents: number;
+  days: TransactionSection[];
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const MONTHS_BR = [
+  'Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro',
+];
+
+const buildMonthSections = (
+  sections: TransactionSection[],
+  filter: FilterType
+): MonthSection[] => {
+  const monthMap = new Map<string, MonthSection>();
+
+  for (const day of sections) {
+    const filtered = filter === 'all'
+      ? day.data
+      : day.data.filter(t => t.type === filter);
+
+    if (filtered.length === 0) continue;
+
+    const monthKey = day.dateKey.slice(0, 7); // "2026-04"
+
+    if (!monthMap.has(monthKey)) {
+      const [year, month] = monthKey.split('-').map(Number);
+      monthMap.set(monthKey, {
+        monthKey,
+        title: `${MONTHS_BR[month - 1]} ${year}`,
+        incomeCents: 0,
+        expenseCents: 0,
+        days: [],
+      });
+    }
+
+    const section = monthMap.get(monthKey)!;
+    section.days.push({ ...day, data: filtered });
+    for (const t of filtered) {
+      if (t.type === 'income') section.incomeCents += t.amountCents;
+      else section.expenseCents += t.amountCents;
+    }
+  }
+
+  return Array.from(monthMap.entries())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([, m]) => m);
+};
+
+const currentMonthKey = (): string =>
+  new Date().toLocaleDateString('en-CA').slice(0, 7);
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
 export default function EntriesScreen() {
   const { colors, spacing, radius } = useTheme();
-  const [sections, setSections] = useState<TransactionSection[]>([]);
+
+  const [sections, setSections]     = useState<TransactionSection[]>([]);
+  const [filter, setFilter]         = useState<FilterType>('all');
   const [refreshing, setRefreshing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading]   = useState(true);
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(
+    () => new Set([currentMonthKey()])
+  );
 
   const fetchHistory = async () => {
     try {
@@ -32,11 +100,7 @@ export default function EntriesScreen() {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchHistory();
-    }, [])
-  );
+  useFocusEffect(useCallback(() => { fetchHistory(); }, []));
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -44,13 +108,26 @@ export default function EntriesScreen() {
     setRefreshing(false);
   };
 
-  const handleDelete = (item: UnifiedTransaction) => {
-    const typeLabel = item.type === 'income' ? 'receita' : 'despesa';
-    const formattedAmount = formatBRL(item.amountCents);
+  const monthSections = useMemo(
+    () => buildMonthSections(sections, filter),
+    [sections, filter]
+  );
 
+  const toggleMonth = (monthKey: string) => {
+    setExpandedMonths(prev => {
+      const next = new Set(prev);
+      next.has(monthKey) ? next.delete(monthKey) : next.add(monthKey);
+      return next;
+    });
+  };
+
+  // ── Ações sobre transação ──────────────────────────────────────────────────
+
+  const confirmDelete = (item: UnifiedTransaction) => {
+    const typeLabel = item.type === 'income' ? 'receita' : 'despesa';
     Alert.alert(
       'Excluir lançamento?',
-      `Deseja excluir esta ${typeLabel} de ${formattedAmount} (${item.label})?\n\nEssa ação não pode ser desfeita.`,
+      `${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} de ${formatBRL(item.amountCents)} (${item.label}).\n\nEssa ação não pode ser desfeita.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -65,29 +142,59 @@ export default function EntriesScreen() {
     );
   };
 
-  const renderTransaction = ({ item }: { item: UnifiedTransaction }) => {
+  const handleLongPress = (item: UnifiedTransaction) => {
+    const typeLabel = item.type === 'income' ? 'Receita' : 'Despesa';
+    Alert.alert(
+      `${typeLabel} · ${formatBRL(item.amountCents)}`,
+      item.label,
+      [
+        {
+          text: 'Editar',
+          onPress: () =>
+            router.push({
+              pathname: item.type === 'income'
+                ? '/(modals)/add-income'
+                : '/(modals)/add-expense',
+              params: {
+                id: item.id,
+                amountCents: String(item.amountCents),
+                refId: item.refId,
+                dateISO: item.date,
+                notes: item.notes ?? '',
+              },
+            }),
+        },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: () => confirmDelete(item),
+        },
+        { text: 'Cancelar', style: 'cancel' },
+      ]
+    );
+  };
+
+  // ── Render de transação ────────────────────────────────────────────────────
+
+  const renderTransaction = (item: UnifiedTransaction) => {
     const isIncome = item.type === 'income';
     const amountColor = isIncome ? colors.income : colors.expense;
-    const arrowIcon = isIncome ? 'arrow-up-circle' : 'arrow-down-circle';
     const sign = isIncome ? '+' : '-';
-
     return (
       <TouchableOpacity
+        key={item.id}
         activeOpacity={0.7}
-        onLongPress={() => handleDelete(item)}
-        delayLongPress={500}
+        onLongPress={() => handleLongPress(item)}
+        delayLongPress={400}
       >
         <View style={[styles.transactionRow, { borderBottomColor: colors.border }]}>
-          {/* Ícone de direção (receita/despesa) */}
-          <View style={[styles.iconContainer, { backgroundColor: isIncome ? `${colors.income}18` : `${colors.expense}18` }]}>
+          <View style={[styles.iconContainer, { backgroundColor: `${amountColor}18` }]}>
             <Ionicons
-              name={arrowIcon}
+              name={isIncome ? 'arrow-up-circle' : 'arrow-down-circle'}
               size={22}
               color={amountColor}
             />
           </View>
-
-          {/* Label + horário */}
           <View style={styles.labelContainer}>
             <Text style={[styles.transactionLabel, { color: colors.text }]} numberOfLines={1}>
               {item.label}
@@ -97,13 +204,9 @@ export default function EntriesScreen() {
               {item.notes ? ` · ${item.notes}` : ''}
             </Text>
           </View>
-
-          {/* Valor */}
           <Text style={[styles.transactionAmount, { color: amountColor }]}>
             {sign} {formatBRL(item.amountCents)}
           </Text>
-
-          {/* Bolinha colorida da fonte/categoria */}
           {item.color && (
             <View style={[styles.colorDot, { backgroundColor: item.color }]} />
           )}
@@ -112,131 +215,226 @@ export default function EntriesScreen() {
     );
   };
 
-  const renderSectionHeader = ({ section }: { section: TransactionSection }) => (
-    <View style={[styles.sectionHeader, { backgroundColor: colors.background }]}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>{section.title}</Text>
-      {/* Subtotal da seção */}
-      <Text style={[styles.sectionSubtotal, { color: colors.muted }]}>
-        {(() => {
-          const incTotal = section.data
-            .filter(t => t.type === 'income')
-            .reduce((sum, t) => sum + t.amountCents, 0);
-          const expTotal = section.data
-            .filter(t => t.type === 'expense')
-            .reduce((sum, t) => sum + t.amountCents, 0);
-          const net = incTotal - expTotal;
-          const color = net >= 0 ? colors.income : colors.expense;
-          return (
-            <Text style={{ color, fontWeight: '600', fontSize: 13 }}>
-              {net >= 0 ? '+' : ''}{formatBRL(net)}
-            </Text>
-          );
-        })()}
-      </Text>
-    </View>
-  );
+  const filterColor = (f: FilterType) =>
+    f === 'income' ? colors.income : f === 'expense' ? colors.expense : colors.primary;
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Ionicons name="receipt-outline" size={64} color={colors.muted} />
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>
-        Nenhum lançamento ainda
-      </Text>
-      <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
-        Adicione receitas e despesas pelo{'\n'}dashboard para vê-las aqui.
-      </Text>
-    </View>
-  );
+  const hasData = monthSections.length > 0;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header fixo */}
+
+      {/* Header */}
       <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Lançamentos</Text>
-        <Text style={[styles.headerSubtitle, { color: colors.muted }]}>
-          Últimas transações
-        </Text>
-        {sections.length > 0 && (
+
+        {/* Filtros */}
+        <View style={styles.filterRow}>
+          {(['all', 'income', 'expense'] as FilterType[]).map(f => {
+            const labels: Record<FilterType, string> = {
+              all: 'Tudo',
+              income: '↑ Receitas',
+              expense: '↓ Despesas',
+            };
+            const isActive = filter === f;
+            const fc = filterColor(f);
+            return (
+              <TouchableOpacity
+                key={f}
+                onPress={() => setFilter(f)}
+                style={[styles.filterPill, {
+                  backgroundColor: isActive ? fc : colors.surface,
+                  borderColor:     isActive ? fc : colors.border,
+                }]}
+              >
+                <Text style={[styles.filterPillText, { color: isActive ? '#fff' : colors.muted }]}>
+                  {labels[f]}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {hasData && (
           <View style={styles.hintRow}>
             <Ionicons name="information-circle-outline" size={14} color="#E67E22" />
-            <Text style={[styles.hintText, { color: colors.text }]}>
-              Pressione um item para excluí-lo
+            <Text style={[styles.hintText, { color: colors.icon }]}>
+              Segure um item para editar ou excluir
             </Text>
           </View>
         )}
       </View>
 
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item.id}
-        renderItem={renderTransaction}
-        renderSectionHeader={renderSectionHeader}
-        ListEmptyComponent={!isLoading ? renderEmptyState : null}
-        stickySectionHeadersEnabled
+      {/* Lista */}
+      <ScrollView
         contentContainerStyle={[
-          { paddingHorizontal: spacing.lg, paddingBottom: 100 },
-          sections.length === 0 && styles.emptyListContent,
+          { paddingHorizontal: spacing.lg, paddingBottom: 100, paddingTop: 8 },
+          !hasData && styles.emptyListContent,
         ]}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
-        ItemSeparatorComponent={() => null}
-      />
+      >
+        {!hasData && !isLoading ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="receipt-outline" size={64} color={colors.muted} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>
+              {filter === 'all'
+                ? 'Nenhum lançamento encontrado'
+                : `Nenhuma ${filter === 'income' ? 'receita' : 'despesa'} encontrada`}
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
+              {filter === 'all'
+                ? 'Adicione receitas e despesas pelo\ndashboard para vê-las aqui.'
+                : 'Tente selecionar "Tudo" para ver\ntodos os lançamentos.'}
+            </Text>
+          </View>
+        ) : (
+          monthSections.map(month => {
+            const isExpanded = expandedMonths.has(month.monthKey);
+            const net = month.incomeCents - month.expenseCents;
+            const netColor = net >= 0 ? colors.income : colors.expense;
+
+            return (
+              <View key={month.monthKey} style={styles.monthSection}>
+
+                {/* Cabeçalho do mês */}
+                <TouchableOpacity
+                  onPress={() => toggleMonth(month.monthKey)}
+                  activeOpacity={0.75}
+                  style={[styles.monthHeader, {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    borderBottomLeftRadius:  isExpanded ? 0 : radius.md,
+                    borderBottomRightRadius: isExpanded ? 0 : radius.md,
+                    borderTopLeftRadius:  radius.md,
+                    borderTopRightRadius: radius.md,
+                  }]}
+                >
+                  <View style={styles.monthHeaderLeft}>
+                    <Ionicons
+                      name={isExpanded ? 'chevron-down' : 'chevron-forward'}
+                      size={15}
+                      color={colors.muted}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={[styles.monthTitle, { color: colors.text }]}>{month.title}</Text>
+                  </View>
+                  <View style={styles.monthHeaderRight}>
+                    <View style={styles.monthIncomeExpenseRow}>
+                      <Text style={[styles.monthIncome, { color: colors.income }]}>
+                        +{formatBRL(month.incomeCents)}
+                      </Text>
+                      <Text style={[styles.monthIncome, { color: colors.expense }]}>
+                        -{formatBRL(month.expenseCents)}
+                      </Text>
+                    </View>
+                    <Text style={[styles.monthNet, { color: netColor }]}>
+                      {net >= 0 ? '+' : ''}{formatBRL(net)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Dias do mês (expandido) */}
+                {isExpanded && (
+                  <View style={[styles.monthBody, {
+                    borderColor: colors.border,
+                    borderBottomLeftRadius:  radius.md,
+                    borderBottomRightRadius: radius.md,
+                  }]}>
+                    {month.days.map(day => {
+                      const dayIncome  = day.data.filter(t => t.type === 'income').reduce((s, t) => s + t.amountCents, 0);
+                      const dayExpense = day.data.filter(t => t.type === 'expense').reduce((s, t) => s + t.amountCents, 0);
+                      const dayNet     = dayIncome - dayExpense;
+                      return (
+                        <View key={day.dateKey}>
+                          <View style={[styles.dayHeader, { borderBottomColor: colors.border }]}>
+                            <Text style={[styles.dayTitle, { color: colors.text }]}>{day.title}</Text>
+                            <Text style={[styles.dayNet, {
+                              color: dayNet >= 0 ? colors.income : colors.expense,
+                            }]}>
+                              {dayNet >= 0 ? '+' : ''}{formatBRL(dayNet)}
+                            </Text>
+                          </View>
+                          {day.data.map(item => renderTransaction(item))}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
     </View>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  container:   { flex: 1 },
+  header:      { paddingTop: 56, paddingBottom: 12 },
+  headerTitle: { fontSize: 28, fontWeight: 'bold' },
+
+  // Filtros
+  filterRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
   },
-  header: {
-    paddingTop: 56,
-    paddingBottom: 16,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  hintRow: {
+  filterPillText: { fontSize: 13, fontWeight: '600' },
+
+  // Hint
+  hintRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10, opacity: 0.7 },
+  hintText: { fontSize: 12, fontStyle: 'italic' },
+
+  // Mês
+  monthSection: { marginBottom: 12 },
+  monthHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-    opacity: 0.7,
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
   },
-  hintText: {
-    fontSize: 12,
-    fontStyle: 'italic',
+  monthHeaderLeft:       { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  monthHeaderRight:      { alignItems: 'flex-end', gap: 2 },
+  monthIncomeExpenseRow: { flexDirection: 'row', gap: 10 },
+  monthTitle:  { fontSize: 15, fontWeight: '700' },
+  monthIncome: { fontSize: 12, fontWeight: '600' },
+  monthNet:    { fontSize: 14, fontWeight: '700' },
+  monthBody: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    paddingHorizontal: 14,
+    paddingBottom: 4,
   },
-  sectionHeader: {
+
+  // Dia
+  dayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingTop: 20,
+    paddingVertical: 10,
+    paddingTop: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  sectionSubtotal: {
-    fontSize: 13,
-  },
+  dayTitle: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+  dayNet:   { fontSize: 13, fontWeight: '600' },
+
+  // Transação
   transactionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 12,
   },
@@ -247,43 +445,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  labelContainer: {
-    flex: 1,
-  },
-  transactionLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  transactionTime: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  transactionAmount: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  colorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginLeft: 4,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-    gap: 12,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  emptyListContent: {
-    flexGrow: 1,
-  },
+  labelContainer:    { flex: 1 },
+  transactionLabel:  { fontSize: 15, fontWeight: '600' },
+  transactionTime:   { fontSize: 12, marginTop: 2 },
+  transactionAmount: { fontSize: 15, fontWeight: '700' },
+  colorDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 4 },
+
+  // Empty state
+  emptyContainer:   { alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 12 },
+  emptyTitle:       { fontSize: 18, fontWeight: '600' },
+  emptySubtitle:    { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  emptyListContent: { flexGrow: 1 },
 });

@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   Keyboard,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
@@ -27,9 +27,22 @@ const formatDateBR = (date: Date): string => {
   return `${day}/${month}/${year}`;
 };
 
+const centsToMasked = (cents: number): string => {
+  let numeric = String(cents).padStart(3, '0');
+  const dec = numeric.slice(-2);
+  let int = numeric.slice(0, -2);
+  int = parseInt(int, 10).toString();
+  int = int.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `R$ ${int},${dec}`;
+};
+
 export default function AddIncomeModal() {
   const { colors, spacing, radius } = useTheme();
+  const params = useLocalSearchParams<{ id?: string; amountCents?: string; refId?: string; dateISO?: string; notes?: string }>();
+  const isEditing = !!params.id;
+
   const [amount, setAmount] = useState('');
+  const [notes, setNotes] = useState('');
   const [sources, setSources] = useState<SortableChipItem[]>([]);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -49,6 +62,10 @@ export default function AddIncomeModal() {
 
   useEffect(() => {
     TransactionsRepository.getIncomeSources().then(setSources);
+    if (params.amountCents) setAmount(centsToMasked(parseInt(params.amountCents, 10)));
+    if (params.refId)       setSelectedSource(params.refId);
+    if (params.dateISO)     setSelectedDate(new Date(params.dateISO));
+    if (params.notes)       setNotes(params.notes);
   }, []);
 
   const handleAmountFocus = () => {
@@ -68,7 +85,12 @@ export default function AddIncomeModal() {
     const cents = parseInt(amount.replace(/\D/g, ''), 10) || 0;
     if (cents <= 0) return;
     try {
-      await TransactionsRepository.addIncome(selectedSource, cents, selectedDate);
+      const notesValue = notes.trim() || undefined;
+      if (isEditing) {
+        await TransactionsRepository.updateIncome(params.id!, selectedSource, cents, selectedDate, notesValue);
+      } else {
+        await TransactionsRepository.addIncome(selectedSource, cents, selectedDate, notesValue);
+      }
       router.back();
     } catch (error) {
       console.error('Erro ao salvar receita:', error);
@@ -97,7 +119,7 @@ export default function AddIncomeModal() {
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.title, { color: colors.text }]}>Nova Receita</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{isEditing ? 'Editar Receita' : 'Nova Receita'}</Text>
 
         {/* 1. SELEÇÃO DA FONTE */}
         <Text style={[styles.label, { color: colors.text }]}>De qual App de rua?</Text>
@@ -105,7 +127,7 @@ export default function AddIncomeModal() {
         {/* Hint de uso do drag & drop */}
         <View style={[styles.hintRow, { marginBottom: spacing.sm }]}>
           <Ionicons name="hand-left-outline" size={14} color="#E67E22" style={{ marginRight: 5 }} />
-          <Text style={[styles.hintText, { color: '#E67E22' }]}>
+          <Text style={[styles.hintText, { color: colors.icon }]}>
             Segure e arraste para reposicionar
           </Text>
         </View>
@@ -161,13 +183,25 @@ export default function AddIncomeModal() {
             mode="date"
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             maximumDate={new Date()}
-            onChange={handleDateChange}
+            onValueChange={handleDateChange}
+          onDismiss={() => setShowDatePicker(false)}
           />
         )}
 
-        {/* 3. BOTÃO SALVAR */}
+        {/* 3. OBSERVAÇÃO */}
+        <AppInput
+          label="Observação (opcional)"
+          placeholder="Ex: Surge duplo, chuva forte..."
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+          numberOfLines={2}
+          style={{ marginTop: spacing.md, textAlignVertical: 'top' } as any}
+        />
+
+        {/* 4. BOTÃO SALVAR */}
         <AppButton
-          title="Adicionar Receita"
+          title={isEditing ? 'Salvar Alterações' : 'Adicionar Receita'}
           size="lg"
           onPress={handleSave}
           style={{ marginTop: spacing.xl }}

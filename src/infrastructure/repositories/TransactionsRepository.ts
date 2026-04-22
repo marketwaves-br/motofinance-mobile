@@ -45,29 +45,29 @@ export class TransactionsRepository {
     return db.getAllAsync<{id: string, name: string}>(`SELECT id, name FROM expense_categories WHERE is_active = 1 ORDER BY sort_order ASC`);
   }
 
-  static async addIncome(sourceId: string, amountCents: number, date?: Date) {
+  static async addIncome(sourceId: string, amountCents: number, date?: Date, notes?: string) {
     const db = await getDatabase();
     const id = Crypto.randomUUID();
     const now = new Date().toISOString();
     const transactionDate = (date ?? new Date()).toISOString();
 
     await db.runAsync(
-      `INSERT INTO incomes (id, source_id, amount_cents, received_at, created_at, updated_at) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, sourceId, amountCents, transactionDate, now, now]
+      `INSERT INTO incomes (id, source_id, amount_cents, received_at, notes, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, sourceId, amountCents, transactionDate, notes ?? null, now, now]
     );
   }
 
-  static async addExpense(categoryId: string, amountCents: number, date?: Date) {
+  static async addExpense(categoryId: string, amountCents: number, date?: Date, notes?: string) {
     const db = await getDatabase();
     const id = Crypto.randomUUID();
     const now = new Date().toISOString();
     const transactionDate = (date ?? new Date()).toISOString();
 
     await db.runAsync(
-      `INSERT INTO expenses (id, category_id, amount_cents, spent_at, created_at, updated_at) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, categoryId, amountCents, transactionDate, now, now]
+      `INSERT INTO expenses (id, category_id, amount_cents, spent_at, notes, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, categoryId, amountCents, transactionDate, notes ?? null, now, now]
     );
   }
 
@@ -81,63 +81,64 @@ export class TransactionsRepository {
     await db.runAsync(`DELETE FROM ${table} WHERE id = ?`, [id]);
   }
 
-  private static getDateRange(period: 'today' | 'week' | 'month') {
-    const now = new Date();
-    const end = new Date(now);
-    end.setHours(23, 59, 59, 999);
-    let start: Date;
-
-    if (period === 'today') {
-      start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-    } else if (period === 'week') {
-      start = new Date(now);
-      start.setDate(now.getDate() - 6);
-      start.setHours(0, 0, 0, 0);
-    } else {
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-      start.setHours(0, 0, 0, 0);
-    }
-
-    return { start: start.toISOString(), end: end.toISOString() };
+  static async updateIncome(id: string, sourceId: string, amountCents: number, date: Date, notes?: string): Promise<void> {
+    const db = await getDatabase();
+    await db.runAsync(
+      `UPDATE incomes SET source_id = ?, amount_cents = ?, received_at = ?, notes = ?, updated_at = ? WHERE id = ?`,
+      [sourceId, amountCents, date.toISOString(), notes ?? null, new Date().toISOString(), id]
+    );
   }
 
-  static async getReportData(period: 'today' | 'week' | 'month') {
+  static async updateExpense(id: string, categoryId: string, amountCents: number, date: Date, notes?: string): Promise<void> {
     const db = await getDatabase();
-    const { start, end } = this.getDateRange(period);
+    await db.runAsync(
+      `UPDATE expenses SET category_id = ?, amount_cents = ?, spent_at = ?, notes = ?, updated_at = ? WHERE id = ?`,
+      [categoryId, amountCents, date.toISOString(), notes ?? null, new Date().toISOString(), id]
+    );
+  }
 
-    const incTotalRes = await db.getAllAsync<{ total: number }>(
-      `SELECT COALESCE(SUM(amount_cents), 0) as total FROM incomes WHERE received_at BETWEEN ? AND ?`,
-      [start, end]
-    );
-    const expTotalRes = await db.getAllAsync<{ total: number }>(
-      `SELECT COALESCE(SUM(amount_cents), 0) as total FROM expenses WHERE spent_at BETWEEN ? AND ?`,
-      [start, end]
-    );
+  static async getReportData(start: Date, end: Date) {
+    const db = await getDatabase();
+    const startISO = start.toISOString();
+    const endISO = end.toISOString();
 
-    const bySource = await db.getAllAsync<{
-      id: string; name: string; color: string | null; totalCents: number;
-    }>(
-      `SELECT s.id, s.name, s.color, SUM(i.amount_cents) as totalCents
-       FROM incomes i
-       JOIN income_sources s ON i.source_id = s.id
-       WHERE i.received_at BETWEEN ? AND ?
-       GROUP BY s.id, s.name, s.color
-       ORDER BY totalCents DESC`,
-      [start, end]
-    );
-
-    const byCategory = await db.getAllAsync<{
-      id: string; name: string; color: string | null; totalCents: number;
-    }>(
-      `SELECT c.id, c.name, c.color, SUM(e.amount_cents) as totalCents
-       FROM expenses e
-       JOIN expense_categories c ON e.category_id = c.id
-       WHERE e.spent_at BETWEEN ? AND ?
-       GROUP BY c.id, c.name, c.color
-       ORDER BY totalCents DESC`,
-      [start, end]
-    );
+    const [incTotalRes, expTotalRes, incCountRes, expCountRes, bySource, byCategory] =
+      await Promise.all([
+        db.getAllAsync<{ total: number }>(
+          `SELECT COALESCE(SUM(amount_cents), 0) as total FROM incomes WHERE received_at BETWEEN ? AND ?`,
+          [startISO, endISO]
+        ),
+        db.getAllAsync<{ total: number }>(
+          `SELECT COALESCE(SUM(amount_cents), 0) as total FROM expenses WHERE spent_at BETWEEN ? AND ?`,
+          [startISO, endISO]
+        ),
+        db.getAllAsync<{ count: number }>(
+          `SELECT COUNT(*) as count FROM incomes WHERE received_at BETWEEN ? AND ?`,
+          [startISO, endISO]
+        ),
+        db.getAllAsync<{ count: number }>(
+          `SELECT COUNT(*) as count FROM expenses WHERE spent_at BETWEEN ? AND ?`,
+          [startISO, endISO]
+        ),
+        db.getAllAsync<{ id: string; name: string; color: string | null; totalCents: number }>(
+          `SELECT s.id, s.name, s.color, SUM(i.amount_cents) as totalCents
+           FROM incomes i
+           JOIN income_sources s ON i.source_id = s.id
+           WHERE i.received_at BETWEEN ? AND ?
+           GROUP BY s.id, s.name, s.color
+           ORDER BY totalCents DESC`,
+          [startISO, endISO]
+        ),
+        db.getAllAsync<{ id: string; name: string; color: string | null; totalCents: number }>(
+          `SELECT c.id, c.name, c.color, SUM(e.amount_cents) as totalCents
+           FROM expenses e
+           JOIN expense_categories c ON e.category_id = c.id
+           WHERE e.spent_at BETWEEN ? AND ?
+           GROUP BY c.id, c.name, c.color
+           ORDER BY totalCents DESC`,
+          [startISO, endISO]
+        ),
+      ]);
 
     const totalIncomeCents = incTotalRes[0]?.total ?? 0;
     const totalExpenseCents = expTotalRes[0]?.total ?? 0;
@@ -146,17 +147,91 @@ export class TransactionsRepository {
       totalIncomeCents,
       totalExpenseCents,
       netCents: totalIncomeCents - totalExpenseCents,
+      incomeCount: incCountRes[0]?.count ?? 0,
+      expenseCount: expCountRes[0]?.count ?? 0,
       bySource,
       byCategory,
     };
   }
 
   /**
-   * Retorna transações (receitas + despesas) agrupadas por dia,
-   * com nome/cor/ícone da fonte ou categoria via JOIN.
-   * Limitado a `limit` registros (padrão: 50).
+   * Retorna receita total e número de dias trabalhados por dia da semana (horário local).
+   * Útil para identificar quais dias rendem mais.
    */
-  static async getTransactionHistory(limit: number = 50): Promise<TransactionSection[]> {
+  static async getDayOfWeekBreakdown(
+    start: Date,
+    end: Date
+  ): Promise<Array<{ dow: number; totalCents: number; workingDays: number }>> {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<{ date: string; cents: number }>(
+      `SELECT received_at as date, amount_cents as cents FROM incomes WHERE received_at BETWEEN ? AND ?`,
+      [start.toISOString(), end.toISOString()]
+    );
+
+    // Agrupa em horário local para evitar bug UTC-3
+    const map = new Map<number, { totalCents: number; days: Set<string> }>();
+    for (const row of rows) {
+      const d   = new Date(row.date);
+      const dow = d.getDay(); // 0=Dom … 6=Sáb (local)
+      const key = d.toLocaleDateString('en-CA');
+      if (!map.has(dow)) map.set(dow, { totalCents: 0, days: new Set() });
+      const entry = map.get(dow)!;
+      entry.totalCents += row.cents;
+      entry.days.add(key);
+    }
+
+    return Array.from(map.entries()).map(([dow, data]) => ({
+      dow,
+      totalCents: data.totalCents,
+      workingDays: data.days.size,
+    }));
+  }
+
+  static async getDailyBreakdown(
+    start: Date,
+    end: Date
+  ): Promise<Array<{ dateKey: string; incomeCents: number; expenseCents: number }>> {
+    const db = await getDatabase();
+    const startISO = start.toISOString();
+    const endISO = end.toISOString();
+
+    const [incomes, expenses] = await Promise.all([
+      db.getAllAsync<{ date: string; cents: number }>(
+        `SELECT received_at as date, amount_cents as cents FROM incomes WHERE received_at BETWEEN ? AND ?`,
+        [startISO, endISO]
+      ),
+      db.getAllAsync<{ date: string; cents: number }>(
+        `SELECT spent_at as date, amount_cents as cents FROM expenses WHERE spent_at BETWEEN ? AND ?`,
+        [startISO, endISO]
+      ),
+    ]);
+
+    const map = new Map<string, { incomeCents: number; expenseCents: number }>();
+
+    for (const row of incomes) {
+      const key = new Date(row.date).toLocaleDateString('en-CA');
+      const entry = map.get(key) ?? { incomeCents: 0, expenseCents: 0 };
+      entry.incomeCents += row.cents;
+      map.set(key, entry);
+    }
+    for (const row of expenses) {
+      const key = new Date(row.date).toLocaleDateString('en-CA');
+      const entry = map.get(key) ?? { incomeCents: 0, expenseCents: 0 };
+      entry.expenseCents += row.cents;
+      map.set(key, entry);
+    }
+
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, data]) => ({ dateKey: key, ...data }));
+  }
+
+  /**
+   * Retorna transações (receitas + despesas) agrupadas por dia,
+   * com nome/cor/ícone/refId da fonte ou categoria via JOIN.
+   * Sem limite de tempo — retorna todo o histórico.
+   */
+  static async getTransactionHistory(): Promise<TransactionSection[]> {
     const db = await getDatabase();
 
     const rows = await db.getAllAsync<{
@@ -168,21 +243,21 @@ export class TransactionsRepository {
       color: string | null;
       icon: string | null;
       notes: string | null;
+      ref_id: string;
     }>(`
-      SELECT 
+      SELECT
         i.id, 'income' as type, i.amount_cents, i.received_at as date,
-        s.name as label, s.color, s.icon, i.notes
+        s.name as label, s.color, s.icon, i.notes, i.source_id as ref_id
       FROM incomes i
       JOIN income_sources s ON i.source_id = s.id
       UNION ALL
-      SELECT 
+      SELECT
         e.id, 'expense' as type, e.amount_cents, e.spent_at as date,
-        c.name as label, c.color, c.icon, e.notes
+        c.name as label, c.color, c.icon, e.notes, e.category_id as ref_id
       FROM expenses e
       JOIN expense_categories c ON e.category_id = c.id
       ORDER BY date DESC
-      LIMIT ?
-    `, [limit]);
+    `);
 
     // Agrupar por dia em horário local (evita bug UTC: transações após 21h aparecem no dia seguinte)
     const grouped = new Map<string, UnifiedTransaction[]>();
@@ -200,6 +275,7 @@ export class TransactionsRepository {
         color: row.color,
         icon: row.icon,
         notes: row.notes,
+        refId: row.ref_id,
       });
     }
 

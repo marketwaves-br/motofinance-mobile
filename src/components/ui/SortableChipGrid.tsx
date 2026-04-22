@@ -283,11 +283,27 @@ export function SortableChipGrid({
     const cur = itemsRef.current;
     const srcIdx = cur.findIndex((i) => i.id === srcId);
     const tgtIdx = cur.findIndex((i) => i.id === targetId);
-    if (srcIdx === -1 || tgtIdx === -1 || srcIdx === tgtIdx) return;
+    if (srcIdx === -1 || tgtIdx === -1) return;
+
+    // Determina se insere antes ou depois do alvo com base no ponto de soltura
+    const tgtL = itemLayouts.current[targetId];
+    const tgtCX = tgtL.x + tgtL.width / 2;
+    const tgtCY = tgtL.y + tgtL.height / 2;
+    const insertAfter =
+      Math.abs(relY - tgtCY) > tgtL.height / 2
+        ? relY > tgtCY   // linhas diferentes: usa eixo Y
+        : relX > tgtCX;  // mesma linha: usa eixo X
+
+    let insertIdx = insertAfter ? tgtIdx + 1 : tgtIdx;
+    // Ajusta porque a remoção de srcIdx desloca os índices seguintes
+    if (srcIdx < insertIdx) insertIdx--;
+    insertIdx = Math.max(0, Math.min(insertIdx, cur.length - 1));
+
+    if (srcIdx === insertIdx) return;
 
     const newItems = [...cur];
     const [removed] = newItems.splice(srcIdx, 1);
-    newItems.splice(tgtIdx, 0, removed);
+    newItems.splice(insertIdx, 0, removed);
     setItems(newItems);
     onOrderChange(newItems);
   }, [onOrderChange]);

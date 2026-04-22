@@ -9,6 +9,7 @@ export interface UnifiedTransaction {
   color: string | null;   // cor da fonte ou categoria
   icon: string | null;    // nome do ícone Ionicons
   notes: string | null;
+  refId: string;          // source_id (receita) ou category_id (despesa)
 }
 
 export interface TransactionSection {
