@@ -1,0 +1,25 @@
+Para essa funcionalidade, o ideal é criar uma branch chamada feature/metas-mensais. Como você já enviou o GoalsRepository.ts anteriormente, essa branch será perfeita para organizar a lógica de interface e os cálculos.
+Aqui está o roteiro para você começar agora:
+1. Criar a Branch de Feature
+A partir da sua branch develop (ou main, se ainda não criou a develop):
+bash
+git checkout -b feature/metas-mensais
+Use o código com cuidado.
+2. Sugestão de Organização para "Metas Mensais"
+Para essa tarefa, você provavelmente vai mexer nestes pontos:
+UI: Criar um componente de barra de progresso (ex: src/components/ui/ProgressBar.tsx).
+Lógica: Integrar o seu GoalsRepository.ts com as telas de resumo.
+State: Adicionar um hook ou contexto para monitorar se a meta do mês foi batida.
+3. Salvar o Progresso
+Conforme for evoluindo o código das metas:
+bash
+git add .
+git commit -m "feat: estrutura inicial da tela de metas mensais"
+git push -u origin feature/metas-mensais
+Use o código com cuidado.
+4. Finalização
+Quando as metas estiverem funcionando perfeitamente:
+Volte para a develop: git checkout develop
+Mescle: git merge feature/metas-mensais
+Envie: git push origin develop
+Dica para as Metas: No arquivo .gitignore que criamos, as metas não precisam de filtros especiais, a menos que você crie algum arquivo de JSON com dados de teste muito pesado. Se for o caso, pode colocar esses arquivos na pasta src/infrastructure/db/ que já está sendo monitorada.

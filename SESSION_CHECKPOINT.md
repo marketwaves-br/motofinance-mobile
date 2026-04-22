@@ -1,8 +1,7 @@
 # MotoFinance Mobile — Session Checkpoint
 
-> **Última atualização**: 10 de abril de 2026 (fim de sessão noturna)
-> **Modelos desta sessão**: Claude Opus 4.6 (auditoria matinal) → Claude Sonnet 4.6 (desenvolvimento + correções)
-> **Status geral**: App funcionalmente completo no escopo atual. Todas as telas implementadas.
+> **Última atualização**: 22 de abril de 2026
+> **Status geral**: App funcionalmente completo. Todas as telas implementadas e testadas.
 
 ---
 
@@ -61,10 +60,11 @@ d:\MotoFinance\motofinance-mobile\
 │   │   ├── reports.tsx           # ✅ Relatórios com seletor Hoje/Semana/Mês + barras proporcionais
 │   │   └── settings.tsx          # Links para manage-sources e manage-categories
 │   └── (modals)/
-│       ├── add-income.tsx        # Modal: registrar receita (com SortableChipGrid)
-│       ├── add-expense.tsx       # Modal: registrar despesa (com SortableChipGrid)
+│       ├── add-income.tsx        # Modal: registrar receita (com SortableChipGrid); aceita params para edição
+│       ├── add-expense.tsx       # Modal: registrar despesa (com SortableChipGrid); aceita params para edição
 │       ├── manage-sources.tsx    # CRUD fontes de receita com soft-delete
-│       └── manage-categories.tsx # CRUD categorias de despesa com soft-delete
+│       ├── manage-categories.tsx # CRUD categorias de despesa com soft-delete
+│       └── manage-goals.tsx      # ✅ NOVO — Metas mensais (receita + lucro líquido)
 └── src/
     ├── domain/
     │   └── entities/             # Income.ts, Expense.ts, UserProfile.ts, Goal.ts
@@ -291,20 +291,21 @@ Ambos `loadOnboardingState()` e `loadUserProfile()` são chamados em `app/_layou
 
 | Tela | Status | Funcionalidades |
 |---|---|---|
-| `app/_layout.tsx` | ✅ OK | initDatabase, splash screen, carrega onboarding + perfil; `setDbIsReady` no `finally` |
+| `app/_layout.tsx` | ✅ OK | initDatabase, splash screen, carrega onboarding + perfil; `setDbIsReady` no `finally`; rota `manage-goals` registrada |
 | `app/index.tsx` | ✅ OK | Redirect condicional baseado em `isOnboardingLoaded` + `hasCompletedOnboarding` |
 | `onboarding/welcome.tsx` | ✅ OK | Apresentação com ícone e botão "Começar Agora" |
 | `onboarding/profile.tsx` | ✅ OK | Coleta nome/tipo atividade, grava SQLite via `UserProfileRepository` + Zustand |
 | `(tabs)/dashboard.tsx` | ✅ OK | Cards receita/despesa/lucro do dia, nome dinâmico do Zustand, pull-to-refresh |
-| `(tabs)/entries.tsx` | ✅ OK | SectionList agrupada por dia (horário local), cores, delete por long-press, empty state |
+| `(tabs)/entries.tsx` | ✅ OK | SectionList agrupada por mês/dia, filtros, long-press → Alert (Editar/Excluir/Cancelar) |
 | `(tabs)/reports.tsx` | ✅ OK | Pills Hoje/Semana/Mês, cards de totais, barras proporcionais por fonte/categoria |
-| `(tabs)/settings.tsx` | ✅ OK | Links para manage-sources e manage-categories |
-| `(modals)/add-income.tsx` | ✅ OK | SortableChipGrid com drag & drop, máscara BRL, date picker, try/catch |
-| `(modals)/add-expense.tsx` | ✅ OK | SortableChipGrid com drag & drop, máscara BRL, date picker, try/catch |
+| `(tabs)/settings.tsx` | ✅ OK | Menu GERENCIAR em ordem alfabética: Categorias de Despesa, Fontes de Receita, Metas Mensais |
+| `(modals)/add-income.tsx` | ✅ OK | SortableChipGrid com drag & drop, máscara BRL, date picker, try/catch; aceita params de edição |
+| `(modals)/add-expense.tsx` | ✅ OK | SortableChipGrid com drag & drop, máscara BRL, date picker, try/catch; aceita params de edição |
 | `(modals)/manage-sources.tsx` | ✅ OK | CRUD fontes com soft-delete, cores do tema |
 | `(modals)/manage-categories.tsx` | ✅ OK | CRUD categorias com soft-delete, cores do tema |
+| `(modals)/manage-goals.tsx` | ✅ NOVO | Metas mensais de receita e lucro líquido com máscara BRL e persistência SQLite |
 
-**Nenhuma tela está como placeholder. O app está funcionalmente completo no escopo atual.**
+**Nenhuma tela está como placeholder. O app está funcionalmente completo e testado.**
 
 ---
 
@@ -444,51 +445,27 @@ keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 80}
 
 ## 13. Próximas Tarefas (Roadmap Priorizado)
 
-### Prioridade Alta — Edição de transações
+### ✅ Concluído nesta sessão (22/04/2026)
 
-**Contexto**: hoje o long-press deleta; o tap não faz nada. O comportamento desejado é tap → editar, long-press → excluir.
-
-**O que implementar**:
-
-1. **`app/(modals)/edit-transaction.tsx`** — novo modal
-   - Recebe via `router.push` params: `id`, `type` ('income'|'expense'), `amountCents`, `sourceOrCategoryId`, `date`
-   - Exibe o mesmo formulário de add, pré-preenchido
-   - Botão "Salvar alterações" + botão "Excluir" no rodapé
-   - Regras: try/catch em todos os saves, `behavior="padding"` no `KeyboardAvoidingView`
-
-2. **`TransactionsRepository.ts`** — adicionar:
-   ```typescript
-   static async updateIncome(id: string, sourceId: string, amountCents: number, date: Date): Promise<void>
-   static async updateExpense(id: string, categoryId: string, amountCents: number, date: Date): Promise<void>
-   ```
-
-3. **`getTransactionHistory()`** — adicionar `source_id`/`category_id` ao SELECT e ao tipo `UnifiedTransaction`, para que o modal de edição pré-selecione o chip correto no `SortableChipGrid`
-
-4. **`entries.tsx`** — ajustar o `renderTransaction`:
-   - `onPress` → `router.push('/(modals)/edit-transaction', { params })`
-   - `onLongPress` → mantém a exclusão atual
-
-5. **`app/_layout.tsx`** — registrar a nova rota:
-   ```typescript
-   <Stack.Screen name="(modals)/edit-transaction" options={{ presentation: 'modal', title: 'Editar Lançamento', ... }} />
-   ```
+| Feature | Detalhes |
+|---|---|
+| **Metas Mensais → modal dedicado** | Extraído de `settings.tsx` para `(modals)/manage-goals.tsx`; menu Ajustes reorganizado em ordem alfabética |
+| **Edição de transações** | Long-press em `entries.tsx` → Alert com Editar / Excluir / Cancelar; "Editar" navega para `add-income` ou `add-expense` com params pré-preenchidos. Testado e funcionando. |
 
 ---
 
-### Prioridade Média — Metas financeiras
+### Prioridade Média — Metas financeiras (UI de acompanhamento)
 
-A tabela `financial_goals` já existe no SQLite. Não tem UI.
+As metas já são salvas/editadas via `manage-goals.tsx`. O que falta é **exibir o progresso** em algum lugar:
 
-**O que implementar**:
-- `GoalsRepository.ts` com CRUD completo
-- Nova seção (dentro de settings ou nova aba)
-- UI: lista de metas com barra de progresso (padrão similar ao `reports.tsx`)
+- **`dashboard.tsx`** — barra de progresso abaixo dos cards (receita atual vs. meta de receita; lucro atual vs. meta de lucro)
+- **`GoalsRepository.ts`** — método `getMonthlyGoals()` já existe; só consumir no dashboard
 
 ---
 
 ### Prioridade Baixa
 
-- **Testes unitários**: `jest-expo` e `@testing-library/react-native` instalados, nenhum teste escrito. Sugestão de início: testes dos repositórios com mock de `getDatabase`.
+- **Testes unitários**: `jest-expo` e `@testing-library/react-native` instalados, nenhum teste escrito.
 - **Exportação de dados**: CSV/PDF do histórico ou relatórios. Requer `expo-file-system` + `expo-sharing`.
 - **SafeArea** (DT-4): padronizar com `react-native-safe-area-context`.
 

@@ -227,12 +227,14 @@ export class TransactionsRepository {
   }
 
   /**
-   * Retorna transações (receitas + despesas) agrupadas por dia,
-   * com nome/cor/ícone/refId da fonte ou categoria via JOIN.
-   * Sem limite de tempo — retorna todo o histórico.
+   * Retorna transações (receitas + despesas) agrupadas por dia.
+   * Se start/end forem fornecidos, filtra pelo intervalo; caso contrário retorna todo o histórico.
    */
-  static async getTransactionHistory(): Promise<TransactionSection[]> {
+  static async getTransactionHistory(start?: Date, end?: Date): Promise<TransactionSection[]> {
     const db = await getDatabase();
+    const hasFilter = start !== undefined && end !== undefined;
+    const startISO  = hasFilter ? start!.toISOString() : null;
+    const endISO    = hasFilter ? end!.toISOString()   : null;
 
     const rows = await db.getAllAsync<{
       id: string;
@@ -250,23 +252,23 @@ export class TransactionsRepository {
         s.name as label, s.color, s.icon, i.notes, i.source_id as ref_id
       FROM incomes i
       JOIN income_sources s ON i.source_id = s.id
+      ${hasFilter ? 'WHERE i.received_at BETWEEN ? AND ?' : ''}
       UNION ALL
       SELECT
         e.id, 'expense' as type, e.amount_cents, e.spent_at as date,
         c.name as label, c.color, c.icon, e.notes, e.category_id as ref_id
       FROM expenses e
       JOIN expense_categories c ON e.category_id = c.id
+      ${hasFilter ? 'WHERE e.spent_at BETWEEN ? AND ?' : ''}
       ORDER BY date DESC
-    `);
+    `, hasFilter ? [startISO, endISO, startISO, endISO] : []);
 
-    // Agrupar por dia em horário local (evita bug UTC: transações após 21h aparecem no dia seguinte)
+    // Agrupar por dia em horário local (evita bug UTC-3)
     const grouped = new Map<string, UnifiedTransaction[]>();
     for (const row of rows) {
-      const dateKey = new Date(row.date).toLocaleDateString('en-CA'); // "2026-04-10" em horário local
-      if (!grouped.has(dateKey)) {
-        grouped.set(dateKey, []);
-      }
-      grouped.get(dateKey)!.push({
+      const dk = new Date(row.date).toLocaleDateString('en-CA');
+      if (!grouped.has(dk)) grouped.set(dk, []);
+      grouped.get(dk)!.push({
         id: row.id,
         type: row.type as 'income' | 'expense',
         amountCents: row.amount_cents,
@@ -279,30 +281,23 @@ export class TransactionsRepository {
       });
     }
 
-    // Converter para TransactionSection[] com títulos localizados
-    // Usa 'en-CA' para obter o formato YYYY-MM-DD em horário local (evita bug UTC-3)
-    const today = new Date();
-    const todayKey = today.toLocaleDateString('en-CA');
-
+    const today     = new Date();
+    const todayKey  = today.toLocaleDateString('en-CA');
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayKey = yesterday.toLocaleDateString('en-CA');
 
     const sections: TransactionSection[] = [];
-    for (const [dateKey, transactions] of grouped) {
+    for (const [dk, transactions] of grouped) {
       let title: string;
-      if (dateKey === todayKey) {
-        title = 'Hoje';
-      } else if (dateKey === yesterdayKey) {
-        title = 'Ontem';
-      } else {
-        // Formatar como DD/MM/AAAA
-        const [year, month, day] = dateKey.split('-');
+      if      (dk === todayKey)     title = 'Hoje';
+      else if (dk === yesterdayKey) title = 'Ontem';
+      else {
+        const [year, month, day] = dk.split('-');
         title = `${day}/${month}/${year}`;
       }
-      sections.push({ title, dateKey, data: transactions });
+      sections.push({ title, dateKey: dk, data: transactions });
     }
-
     return sections;
   }
 }

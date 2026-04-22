@@ -9,6 +9,9 @@ import {
   Platform,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import {
+  startOfDay, endOfDay, dateKey, getThisMonday, getFirstOfMonth, formatDateBR,
+} from '@/lib/dates';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -37,31 +40,6 @@ type DailyData = {
 
 type DowData = { dow: number; totalCents: number; workingDays: number };
 
-// ─── Date helpers ─────────────────────────────────────────────────────────────
-
-const startOfDay = (d: Date): Date => { const r = new Date(d); r.setHours(0, 0, 0, 0); return r; };
-const endOfDay   = (d: Date): Date => { const r = new Date(d); r.setHours(23, 59, 59, 999); return r; };
-const dateKey    = (d: Date): string => d.toLocaleDateString('en-CA');
-
-const getThisMonday = (): Date => {
-  const today = new Date();
-  const day = today.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + diff);
-  return startOfDay(monday);
-};
-
-const getFirstOfMonth = (): Date => {
-  const today = new Date();
-  return new Date(today.getFullYear(), today.getMonth(), 1);
-};
-
-const formatDateBR = (d: Date): string => {
-  const day   = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  return `${day}/${month}/${d.getFullYear()}`;
-};
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 

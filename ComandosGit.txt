@@ -1,0 +1,96 @@
+Comandos git
+
+ git remote -v  -> verifica se o repositório remoto está associado à pasta
+
+
+# para atualizar o repositório remoto:
+
+git add .   
+
+git commit -m "Alguam observação. Ex Atualização 2026-04-22 10:00"
+
+git push origin main  -> envia para o repositório remoto.
+
+USANDO UM REPOSITÓRIO DE DESENVOLVIMENTO
+
+1. Criar a branch de desenvolvimento (develop)
+Atualmente você está na main. Vamos criar a develop a partir dela e enviá-la para o GitHub:
+bash
+# Cria a branch develop e já muda para ela
+git checkout -b develop
+
+# Envia a nova branch para o servidor
+git push -u origin develop
+Use o código com cuidado.
+2. O fluxo de trabalho diário
+Agora que você tem as duas, o dia a dia funciona assim:
+Trabalhe na develop: Garanta que você está nela com git branch (ela deve estar com um asterisco).
+Faça seus commits normalmente:
+bash
+git add .
+git commit -m "Nova funcionalidade X"
+git push origin develop
+Use o código com cuidado.
+3. Quando estiver tudo pronto para "Produção"
+Quando a versão na develop estiver estável e você quiser atualizar a main, você faz o Merge (fusão):
+bash
+# 1. Muda para a main
+git checkout main
+
+# 2. Puxa as alterações da develop para dentro da main
+git merge develop
+
+# 3. Envia a main atualizada para o GitHub
+git push origin main
+
+# 4. Volta para a develop para continuar trabalhando
+git checkout develop
+Use o código com cuidado.
+Dica de Ouro: Proteção de Branch
+No GitHub, você pode ir em Settings > Branches e adicionar uma regra de proteção para a main. Isso impede que você dê um push acidental nela, exigindo que você passe pela develop primeiro.
+
+
+
+
+Passo a Passo: Configurando o .gitignore
+1. Crie o arquivo na raiz do projeto:
+No seu terminal (dentro da pasta motofinance-mobile), execute:
+bash
+notepad .gitignore
+Use o código com cuidado.
+(Se o Windows perguntar se deseja criar um novo arquivo, diga que Sim).
+2. Cole o conteúdo abaixo no arquivo e salve:
+text
+# Configurações do Claude e IDEs
+.claude/
+.vscode/
+.idea/
+
+# Dependências e Builds
+node_modules/
+.expo/
+dist/
+
+# Arquivos de log e sistema
+*.log
+.DS_Store
+Thumbs.db
+
+# Arquivos de texto de fim de sessão (opcional)
+*.txt
+Use o código com cuidado.
+3. Remova a pasta .claude do GitHub (sem apagar do seu PC):
+Como ela já foi enviada no último "push", você precisa dizer ao Git para parar de segui-la:
+bash
+git rm -r --cached .claude/
+Use o código com cuidado.
+4. Finalize a limpeza e envie a atualização:
+Agora você registra que o .gitignore foi criado e que os arquivos indesejados foram removidos do repositório remoto:
+bash
+
+git add .
+git commit -m "Configura .gitignore e remove arquivos locais do rastreamento"
+git push origin main
+
+Use o código com cuidado.
+A partir de agora, qualquer alteração dentro da pasta .claude/ será ignorada automaticamente pelo Git.

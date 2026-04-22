@@ -1,0 +1,46 @@
+Trabalhar com Feature Branches é o segredo para manter o código organizado, especialmente quando você está testando ideias novas sem risco de quebrar o que já está funcionando na develop.
+O conceito é simples: cada nova funcionalidade ou correção de erro ganha uma "branch temporária".
+Como usar Feature Branches (Passo a Passo)
+1. Parta sempre da develop
+Antes de começar algo novo, certifique-se de que sua base está atualizada:
+bash
+git checkout develop
+git pull origin develop
+Use o código com cuidado.
+2. Crie a branch da funcionalidade
+Dê um nome claro à branch (ex: feat-login-google ou fix-calculo-gastos):
+bash
+git checkout -b feature/nova-funcionalidade
+Use o código com cuidado.
+3. Trabalhe e faça commits
+Faça o que precisar no código. Seus commits ficarão "escondidos" aqui:
+bash
+git add .
+git commit -m "Desenvolvendo a lógica da nova tela"
+Use o código com cuidado.
+4. Envie para o GitHub (opcional)
+Se quiser que outras pessoas vejam ou para ter um backup na nuvem:
+bash
+git push -u origin feature/nova-funcionalidade
+Use o código com cuidado.
+5. Finalize e junte à develop
+Quando a tarefa estiver pronta e testada, você "devolve" o código para a branch de desenvolvimento:
+bash
+# Volta para a develop
+git checkout develop
+
+# Traz o código da feature para dentro dela
+git merge feature/nova-funcionalidade
+
+# Envia a develop atualizada
+git push origin develop
+Use o código com cuidado.
+6. Delete a branch de feature (Limpeza)
+Como ela já foi mesclada, não precisa mais existir:
+bash
+git branch -d feature/nova-funcionalidade
+Use o código com cuidado.
+Resumo da estrutura agora:
+main: Versão oficial e estável (o que o usuário final vê).
+develop: Integração de todas as funcionalidades prontas.
+feature/nome: Onde a "mágica" acontece individualmente.

@@ -51,6 +51,7 @@ export default function RootLayout() {
         <Stack.Screen name="(modals)/add-expense" options={{ presentation: 'modal', title: 'Adicionar Despesa', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
         <Stack.Screen name="(modals)/manage-sources" options={{ presentation: 'modal', title: 'Empresas & Fontes', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
         <Stack.Screen name="(modals)/manage-categories" options={{ presentation: 'modal', title: 'Categorias de Despesa', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
+        <Stack.Screen name="(modals)/manage-goals" options={{ presentation: 'modal', title: 'Metas Mensais', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
       </Stack>
     </GestureHandlerRootView>
   );
