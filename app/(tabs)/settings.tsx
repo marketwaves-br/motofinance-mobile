@@ -107,28 +107,32 @@ export default function SettingsScreen() {
       </View>
 
       {/* ── Desenvolvedor ─────────────────────────────────────── */}
-      <View style={[styles.sectionHeader, { borderBottomColor: colors.border, marginTop: spacing.xl }]}>
-        <Text style={[styles.sectionLabel, { color: colors.muted }]}>DESENVOLVEDOR</Text>
-      </View>
-
-      <View style={styles.menuWrapper}>
-        <TouchableOpacity
-          onPress={handleSeedData}
-          disabled={seeding}
-          style={[styles.menuItem, {
-            backgroundColor: colors.surface,
-            borderColor: seeding ? colors.border : '#E67E22',
-            opacity: seeding ? 0.6 : 1,
-          }]}
-        >
-          <View style={styles.menuLeft}>
-            <Ionicons name="flask-outline" size={22} color="#E67E22" style={{ marginRight: 14 }} />
-            <Text style={[styles.menuText, { color: colors.text }]}>
-              {seeding ? 'Gerando dados...' : 'Gerar Dados de Teste'}
-            </Text>
+      {__DEV__ && (
+        <>
+          <View style={[styles.sectionHeader, { borderBottomColor: colors.border, marginTop: spacing.xl }]}>
+            <Text style={[styles.sectionLabel, { color: colors.muted }]}>DESENVOLVEDOR</Text>
           </View>
-        </TouchableOpacity>
-      </View>
+
+          <View style={styles.menuWrapper}>
+            <TouchableOpacity
+              onPress={handleSeedData}
+              disabled={seeding}
+              style={[styles.menuItem, {
+                backgroundColor: colors.surface,
+                borderColor: seeding ? colors.border : '#E67E22',
+                opacity: seeding ? 0.6 : 1,
+              }]}
+            >
+              <View style={styles.menuLeft}>
+                <Ionicons name="flask-outline" size={22} color="#E67E22" style={{ marginRight: 14 }} />
+                <Text style={[styles.menuText, { color: colors.text }]}>
+                  {seeding ? 'Gerando dados...' : 'Gerar Dados de Teste'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
     </ScrollView>
   );
 }

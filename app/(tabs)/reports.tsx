@@ -7,6 +7,9 @@ import {
   RefreshControl,
   TouchableOpacity,
   Platform,
+  Alert,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import {
@@ -19,6 +22,8 @@ import { TransactionsRepository } from '@/infrastructure/repositories/Transactio
 import { GoalsRepository, MonthlyGoals } from '@/infrastructure/repositories/GoalsRepository';
 import { formatBRL } from '@/lib/formatters/currency';
 import { AppCard } from '@/components/ui/AppCard';
+import { shareCSV, sharePDF, printPDF, printCSV, ExportData } from '@/lib/exportReport';
+import { useAppStore } from '@/stores/app-store';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,18 +50,21 @@ type DowData = { dow: number; totalCents: number; workingDays: number };
 
 export default function ReportsScreen() {
   const { colors, spacing, radius } = useTheme();
+  const userName = useAppStore(s => s.userName);
 
   const [startDate, setStartDate] = useState<Date>(() => getFirstOfMonth());
   const [endDate,   setEndDate]   = useState<Date>(() => startOfDay(new Date()));
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker,   setShowEndPicker]   = useState(false);
 
-  const [report,     setReport]     = useState<ReportData | null>(null);
-  const [prevReport, setPrevReport] = useState<ReportData | null>(null);
-  const [dailyData,  setDailyData]  = useState<DailyData[]>([]);
-  const [dowData,    setDowData]    = useState<DowData[]>([]);
-  const [goals,      setGoals]      = useState<MonthlyGoals>({ income: null, net: null });
-  const [refreshing, setRefreshing] = useState(false);
+  const [report,      setReport]      = useState<ReportData | null>(null);
+  const [prevReport,  setPrevReport]  = useState<ReportData | null>(null);
+  const [dailyData,   setDailyData]   = useState<DailyData[]>([]);
+  const [dowData,     setDowData]     = useState<DowData[]>([]);
+  const [goals,       setGoals]       = useState<MonthlyGoals>({ income: null, net: null });
+  const [refreshing,   setRefreshing]   = useState(false);
+  const [isExporting,  setIsExporting]  = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // ── Active quick preset ────────────────────────────────────────────────────
 
@@ -115,6 +123,58 @@ export default function ReportsScreen() {
   useFocusEffect(
     useCallback(() => { fetchReport(); }, [startDate, endDate])
   );
+
+  // ── Export ─────────────────────────────────────────────────────────────────
+
+  const buildExportData = (): ExportData | null => {
+    if (!report) return null;
+    const startLabel = formatDateBR(startDate);
+    const endLabel   = formatDateBR(endDate);
+    const periodLabel = startLabel === endLabel ? startLabel : `${startLabel} a ${endLabel}`;
+    const now = new Date();
+    const generatedAt = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
+    return {
+      periodLabel,
+      generatedAt,
+      ...(userName ? { userName } : {}),
+      totalIncomeCents:  report.totalIncomeCents,
+      totalExpenseCents: report.totalExpenseCents,
+      netCents:          report.netCents,
+      incomeCount:       report.incomeCount,
+      expenseCount:      report.expenseCount,
+      bySource:          report.bySource.map(s => ({ name: s.name, totalCents: s.totalCents })),
+      byCategory:        report.byCategory.map(c => ({ name: c.name, totalCents: c.totalCents })),
+      dailyData,
+    };
+  };
+
+  const doExport = async (format: 'csv-print' | 'csv-share' | 'pdf-print' | 'pdf-share') => {
+    const data = buildExportData();
+    if (!data) {
+      Alert.alert('Sem dados', 'Não há dados no período selecionado para exportar.');
+      return;
+    }
+    setIsExporting(true);
+    try {
+      if      (format === 'csv-print')  await printCSV(data);
+      else if (format === 'csv-share')  await shareCSV(data);
+      else if (format === 'pdf-print')  await printPDF(data);
+      else                              await sharePDF(data);
+    } catch (err: any) {
+      console.error('Erro ao exportar:', err);
+      Alert.alert('Erro', 'Não foi possível gerar o arquivo. Tente novamente.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExport = () => {
+    if (!report) {
+      Alert.alert('Sem dados', 'Carregue os dados antes de exportar.');
+      return;
+    }
+    setShowExportModal(true);
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -241,7 +301,28 @@ export default function ReportsScreen() {
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Relatórios</Text>
+        <View style={styles.headerRow}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Relatórios</Text>
+          <TouchableOpacity
+            id="export-report-btn"
+            onPress={handleExport}
+            disabled={isExporting || !report}
+            style={[styles.exportBtn, {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              opacity: (isExporting || !report) ? 0.45 : 1,
+            }]}
+            activeOpacity={0.7}
+          >
+            {isExporting
+              ? <ActivityIndicator size="small" color={colors.primary} />
+              : <Ionicons name="share-outline" size={18} color={colors.primary} />
+            }
+            <Text style={[styles.exportBtnText, { color: colors.primary }]}>
+              {isExporting ? 'Exportando…' : 'Exportar'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Quick presets */}
         <View style={styles.pillRow}>
@@ -756,6 +837,99 @@ export default function ReportsScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* ── Modal de Exportação ────────────────────────────────────────────── */}
+      <Modal
+        visible={showExportModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExportModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowExportModal(false)}
+        >
+          {/* Card do modal — não propaga toque para o overlay */}
+          <TouchableOpacity activeOpacity={1} style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Exportar Relatório</Text>
+            <Text style={[styles.modalPeriod, { color: colors.muted }]}>
+              {formatDateBR(startDate)}{dateKey(startDate) !== dateKey(endDate) ? ` – ${formatDateBR(endDate)}` : ''}
+            </Text>
+
+            {/* ── Seção PDF ──────────────────────────────────────────────────── */}
+            <View style={styles.exportSection}>
+              <View style={[styles.exportSectionHeader, { borderBottomColor: colors.border }]}>
+                <Ionicons name="document-text-outline" size={20} color="#E74C3C" />
+                <Text style={[styles.exportSectionLabel, { color: colors.text }]}>PDF</Text>
+                <Text style={[styles.exportSectionSub, { color: colors.muted }]}>documento</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.exportOption}
+                onPress={() => { setShowExportModal(false); setTimeout(() => doExport('pdf-print'), 300); }}
+              >
+                <View style={[styles.exportOptionIcon, { backgroundColor: colors.background }]}>
+                  <Ionicons name="print-outline" size={17} color={colors.primary} />
+                </View>
+                <Text style={[styles.exportOptionText, { color: colors.text }]}>Visualizar / Imprimir</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.exportOption}
+                onPress={() => { setShowExportModal(false); setTimeout(() => doExport('pdf-share'), 300); }}
+              >
+                <View style={[styles.exportOptionIcon, { backgroundColor: colors.background }]}>
+                  <Ionicons name="share-social-outline" size={17} color={colors.primary} />
+                </View>
+                <Text style={[styles.exportOptionText, { color: colors.text }]}>Compartilhar</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* ── Divisor ─────────────────────────────────────────────────── */}
+            <View style={[styles.exportDivider, { backgroundColor: colors.border }]} />
+
+            {/* ── Seção CSV ──────────────────────────────────────────────────── */}
+            <View style={styles.exportSection}>
+              <View style={[styles.exportSectionHeader, { borderBottomColor: colors.border }]}>
+                <Ionicons name="grid-outline" size={20} color="#1D6F42" />
+                <Text style={[styles.exportSectionLabel, { color: colors.text }]}>CSV</Text>
+                <Text style={[styles.exportSectionSub, { color: colors.muted }]}>planilha</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.exportOption}
+                onPress={() => { setShowExportModal(false); setTimeout(() => doExport('csv-print'), 300); }}
+              >
+                <View style={[styles.exportOptionIcon, { backgroundColor: colors.background }]}>
+                  <Ionicons name="print-outline" size={17} color={colors.primary} />
+                </View>
+                <Text style={[styles.exportOptionText, { color: colors.text }]}>Visualizar / Imprimir</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.exportOption}
+                onPress={() => { setShowExportModal(false); setTimeout(() => doExport('csv-share'), 300); }}
+              >
+                <View style={[styles.exportOptionIcon, { backgroundColor: colors.background }]}>
+                  <Ionicons name="share-social-outline" size={17} color={colors.primary} />
+                </View>
+                <Text style={[styles.exportOptionText, { color: colors.text }]}>Compartilhar</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* ── Cancelar ────────────────────────────────────────────────── */}
+            <TouchableOpacity
+              style={[styles.exportCancelBtn, { borderTopColor: colors.border }]}
+              onPress={() => setShowExportModal(false)}
+            >
+              <Text style={[styles.exportCancelText, { color: colors.muted }]}>Cancelar</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
     </View>
   );
 }
@@ -763,9 +937,97 @@ export default function ReportsScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container:  { flex: 1 },
-  header:     { paddingTop: 56, paddingBottom: 16 },
-  headerTitle:{ fontSize: 28, fontWeight: 'bold' },
+  container:   { flex: 1 },
+  header:      { paddingTop: 56, paddingBottom: 16 },
+  headerRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerTitle: { fontSize: 28, fontWeight: 'bold' },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  exportBtnText: { fontSize: 13, fontWeight: '600' },
+
+  // Export modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-start',
+    paddingTop: 190,       // logo abaixo dos campos de data
+    paddingHorizontal: 16,
+  },
+  modalSheet: {
+    borderRadius: 16,
+    paddingBottom: 8,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    // sombra sutil (iOS)
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    // elevação (Android)
+    elevation: 8,
+  },
+  modalHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 18,
+  },
+  modalTitle: {
+    fontSize: 17, fontWeight: '700', marginBottom: 2,
+  },
+  modalPeriod: {
+    fontSize: 12, marginBottom: 20,
+  },
+  exportSection: {
+    marginBottom: 4,
+  },
+  exportSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 4,
+  },
+  exportSectionLabel: {
+    fontSize: 15, fontWeight: '700', flex: 1,
+  },
+  exportSectionSub: {
+    fontSize: 11,
+  },
+  exportOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 11,
+    paddingLeft: 12,
+  },
+  exportOptionIcon: {
+    width: 32, height: 32, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  exportOptionText: {
+    fontSize: 15,
+  },
+  exportDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 10,
+  },
+  exportCancelBtn: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 16,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  exportCancelText: {
+    fontSize: 15, fontWeight: '600',
+  },
 
   // Period selector
   pillRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
