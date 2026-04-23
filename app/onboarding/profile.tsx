@@ -1,33 +1,35 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { router } from 'expo-router';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
 import { useTheme } from '@/theme';
 import { useAppStore } from '@/stores/app-store';
 import { UserProfileRepository } from '@/infrastructure/repositories/UserProfileRepository';
+import { profileSchema, ProfileInput } from '@/lib/validation';
 
 export default function ProfileScreen() {
   const { colors, spacing } = useTheme();
   const { completeOnboarding } = useAppStore();
-  const [fullName, setFullName] = useState('');
-  const [activityType, setActivityType] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleFinish = async () => {
-    const trimmedName = fullName.trim();
-    if (!trimmedName) {
-      Alert.alert('Atenção', 'Por favor, informe seu nome ou apelido.');
-      return;
-    }
+  const {
+    control,
+    handleSubmit,
+    formState: { errors, isValid },
+  } = useForm<ProfileInput>({
+    resolver: zodResolver(profileSchema),
+    mode: 'onChange',
+    defaultValues: { fullName: '', activityType: '' },
+  });
 
+  const onSubmit = async (data: ProfileInput) => {
     setIsSaving(true);
     try {
-      // 1. Gravar perfil no SQLite
-      await UserProfileRepository.saveProfile(trimmedName, activityType.trim());
-      // 2. Marcar onboarding como concluído (SQLite + Zustand)
+      await UserProfileRepository.saveProfile(data.fullName, data.activityType ?? '');
       await completeOnboarding();
-      // 3. Redirecionar para dashboard
       router.replace('/');
     } catch (error) {
       console.error('Erro ao salvar perfil:', error);
@@ -38,7 +40,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
@@ -48,26 +50,43 @@ export default function ProfileScreen() {
           Defina seu perfil básico para iniciarmos o MotoFinance de forma configurada.
         </Text>
 
-        <AppInput 
-          label="Como devemos te chamar?" 
-          placeholder="Ex: João, Motorista..." 
-          value={fullName}
-          onChangeText={setFullName}
+        <Controller
+          control={control}
+          name="fullName"
+          render={({ field: { value, onChange } }) => (
+            <AppInput
+              label="Como devemos te chamar?"
+              placeholder="Ex: João, Motorista..."
+              value={value}
+              onChangeText={onChange}
+              error={errors.fullName?.message}
+            />
+          )}
         />
-        <AppInput 
-          label="O que você faz predominantemente?" 
-          placeholder="Ex: Uber, iFood, Motofrete" 
-          value={activityType}
-          onChangeText={setActivityType}
+
+        <Controller
+          control={control}
+          name="activityType"
+          render={({ field: { value, onChange } }) => (
+            <AppInput
+              label="O que você faz predominantemente?"
+              placeholder="Ex: Uber, iFood, Motofrete"
+              value={value ?? ''}
+              onChangeText={onChange}
+              error={errors.activityType?.message}
+            />
+          )}
         />
+
         <AppInput label="Moeda Padrão" placeholder="Ex: BRL" value="BRL" editable={false} />
 
         <View style={{ marginTop: spacing.xl }}>
-          <AppButton 
-            title="Salvar e Ir para Painel" 
-            size="lg" 
-            onPress={handleFinish}
+          <AppButton
+            title="Salvar e Ir para Painel"
+            size="lg"
+            onPress={handleSubmit(onSubmit)}
             isLoading={isSaving}
+            disabled={!isValid || isSaving}
           />
         </View>
       </ScrollView>
@@ -78,5 +97,5 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   title: { fontSize: 32, fontWeight: 'bold', marginBottom: 8, letterSpacing: -0.5 },
-  subtitle: { fontSize: 16, lineHeight: 24 }
+  subtitle: { fontSize: 16, lineHeight: 24 },
 });

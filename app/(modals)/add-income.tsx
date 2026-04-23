@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Keyboard,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
@@ -19,6 +21,8 @@ import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { TransactionsRepository } from '@/infrastructure/repositories/TransactionsRepository';
 import { IncomeSourcesRepository } from '@/infrastructure/repositories/IncomeSourcesRepository';
+import { incomeSchema, IncomeInput } from '@/lib/validation';
+import { applyBRLMask, centsToMaskedBRL, parseBRLToCents } from '@/lib/formatters/currency';
 
 const formatDateBR = (date: Date): string => {
   const day = String(date.getDate()).padStart(2, '0');
@@ -27,69 +31,45 @@ const formatDateBR = (date: Date): string => {
   return `${day}/${month}/${year}`;
 };
 
-const centsToMasked = (cents: number): string => {
-  let numeric = String(cents).padStart(3, '0');
-  const dec = numeric.slice(-2);
-  let int = numeric.slice(0, -2);
-  int = parseInt(int, 10).toString();
-  int = int.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `R$ ${int},${dec}`;
-};
-
 export default function AddIncomeModal() {
   const { colors, spacing, radius } = useTheme();
   const params = useLocalSearchParams<{ id?: string; amountCents?: string; refId?: string; dateISO?: string; notes?: string }>();
   const isEditing = !!params.id;
 
-  const [amount, setAmount] = useState('');
-  const [notes, setNotes] = useState('');
   const [sources, setSources] = useState<SortableChipItem[]>([]);
-  const [selectedSource, setSelectedSource] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  const handleAmountChange = (text: string) => {
-    let numericValue = text.replace(/\D/g, '');
-    if (!numericValue) { setAmount(''); return; }
-    numericValue = numericValue.padStart(3, '0');
-    const decimalPart = numericValue.slice(-2);
-    let integerPart = numericValue.slice(0, -2);
-    integerPart = parseInt(integerPart, 10).toString();
-    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    setAmount(`R$ ${integerPart},${decimalPart}`);
-  };
+  const {
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting, isValid },
+  } = useForm<IncomeInput>({
+    resolver: zodResolver(incomeSchema),
+    mode: 'onChange',
+    defaultValues: {
+      amountCents: params.amountCents ? parseInt(params.amountCents, 10) : (undefined as unknown as number),
+      refId: params.refId ?? '',
+      date: params.dateISO ? new Date(params.dateISO) : new Date(),
+      notes: params.notes ?? undefined,
+    },
+  });
 
   useEffect(() => {
     TransactionsRepository.getIncomeSources().then(setSources);
-    if (params.amountCents) setAmount(centsToMasked(parseInt(params.amountCents, 10)));
-    if (params.refId)       setSelectedSource(params.refId);
-    if (params.dateISO)     setSelectedDate(new Date(params.dateISO));
-    if (params.notes)       setNotes(params.notes);
   }, []);
 
   const handleAmountFocus = () => {
     setTimeout(() => { scrollRef.current?.scrollToEnd({ animated: true }); }, 150);
   };
 
-  const handleDateChange = (_event: DateTimePickerEvent, date?: Date) => {
-    setShowDatePicker(false);
-    if (date) setSelectedDate(date);
-  };
-
-  const handleSave = async () => {
-    if (!amount || !selectedSource) {
-      Alert.alert('Atenção', 'Preencha o valor e selecione a fonte (ex: Uber).');
-      return;
-    }
-    const cents = parseInt(amount.replace(/\D/g, ''), 10) || 0;
-    if (cents <= 0) return;
+  const onSubmit = async (data: IncomeInput) => {
     try {
-      const notesValue = notes.trim() || undefined;
       if (isEditing) {
-        await TransactionsRepository.updateIncome(params.id!, selectedSource, cents, selectedDate, notesValue);
+        await TransactionsRepository.updateIncome(params.id!, data.refId, data.amountCents, data.date, data.notes);
       } else {
-        await TransactionsRepository.addIncome(selectedSource, cents, selectedDate, notesValue);
+        await TransactionsRepository.addIncome(data.refId, data.amountCents, data.date, data.notes);
       }
       router.back();
     } catch (error) {
@@ -107,6 +87,8 @@ export default function AddIncomeModal() {
     }
   };
 
+  const selectedRefId = watch('refId');
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -121,10 +103,8 @@ export default function AddIncomeModal() {
       >
         <Text style={[styles.title, { color: colors.text }]}>{isEditing ? 'Editar Receita' : 'Nova Receita'}</Text>
 
-        {/* 1. SELEÇÃO DA FONTE */}
         <Text style={[styles.label, { color: colors.text }]}>De qual App de rua?</Text>
 
-        {/* Hint de uso do drag & drop */}
         <View style={[styles.hintRow, { marginBottom: spacing.sm }]}>
           <Ionicons name="hand-left-outline" size={14} color="#E67E22" style={{ marginRight: 5 }} />
           <Text style={[styles.hintText, { color: colors.icon }]}>
@@ -132,80 +112,112 @@ export default function AddIncomeModal() {
           </Text>
         </View>
 
-        <SortableChipGrid
-          items={sources}
-          selectedId={selectedSource}
-          onSelect={setSelectedSource}
-          onOrderChange={handleOrderChange}
-          accentColor={colors.primary}
-          borderColor={colors.border}
-          textColor={colors.text}
-          radiusMd={radius.md}
+        <Controller
+          control={control}
+          name="refId"
+          render={({ field: { onChange } }) => (
+            <SortableChipGrid
+              items={sources}
+              selectedId={selectedRefId || null}
+              onSelect={(id) => onChange(id ?? '')}
+              onOrderChange={handleOrderChange}
+              accentColor={colors.primary}
+              borderColor={colors.border}
+              textColor={colors.text}
+              radiusMd={radius.md}
+            />
+          )}
         />
+        {errors.refId && <Text style={[styles.fieldError, { color: colors.danger }]}>{errors.refId.message}</Text>}
 
-        {/* 2. VALOR + DATA (lado a lado) */}
         <View style={[styles.valueRow, { marginTop: spacing.lg }]}>
           <View style={styles.valueField}>
-            <AppInput
-              label="Valor da Receita"
-              placeholder="R$ 0,00"
-              keyboardType="numeric"
-              value={amount}
-              onChangeText={handleAmountChange}
-              onFocus={handleAmountFocus}
-              style={{ marginBottom: 0 }}
+            <Controller
+              control={control}
+              name="amountCents"
+              render={({ field: { value, onChange } }) => (
+                <AppInput
+                  label="Valor da Receita"
+                  placeholder="R$ 0,00"
+                  keyboardType="numeric"
+                  value={value ? centsToMaskedBRL(value) : ''}
+                  onChangeText={(t) => {
+                    const masked = applyBRLMask(t);
+                    onChange(masked ? parseBRLToCents(masked) : undefined);
+                  }}
+                  onFocus={handleAmountFocus}
+                  error={errors.amountCents?.message}
+                  style={{ marginBottom: 0 }}
+                />
+              )}
             />
           </View>
 
           <View style={styles.dateField}>
             <Text style={[styles.dateLabel, { color: colors.text }]}>Data</Text>
-            <TouchableOpacity
-              style={[styles.dateButton, {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radius.md,
-                padding: spacing.md,
-              }]}
-              onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="calendar-outline" size={16} color={colors.primary} style={{ marginRight: 6 }} />
-              <Text style={[styles.dateText, { color: colors.text }]}>
-                {formatDateBR(selectedDate)}
-              </Text>
-            </TouchableOpacity>
+            <Controller
+              control={control}
+              name="date"
+              render={({ field: { value, onChange } }) => (
+                <>
+                  <TouchableOpacity
+                    style={[styles.dateButton, {
+                      backgroundColor: colors.surface,
+                      borderColor: errors.date ? colors.danger : colors.border,
+                      borderRadius: radius.md,
+                      padding: spacing.md,
+                    }]}
+                    onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="calendar-outline" size={16} color={colors.primary} style={{ marginRight: 6 }} />
+                    <Text style={[styles.dateText, { color: colors.text }]}>
+                      {formatDateBR(value)}
+                    </Text>
+                  </TouchableOpacity>
+                  {showDatePicker && (
+                    <DateTimePicker
+                      value={value}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      maximumDate={new Date()}
+                      onValueChange={(_e: DateTimePickerEvent, d?: Date) => {
+                        setShowDatePicker(false);
+                        if (d) onChange(d);
+                      }}
+                      onDismiss={() => setShowDatePicker(false)}
+                    />
+                  )}
+                </>
+              )}
+            />
           </View>
         </View>
+        {errors.date && <Text style={[styles.fieldError, { color: colors.danger }]}>{errors.date.message}</Text>}
 
-        {showDatePicker && (
-          <DateTimePicker
-            value={selectedDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            maximumDate={new Date()}
-            onValueChange={handleDateChange}
-          onDismiss={() => setShowDatePicker(false)}
-          />
-        )}
-
-        {/* 3. OBSERVAÇÃO */}
-        <AppInput
-          label="Observação (opcional)"
-          placeholder="Ex: Surge duplo, chuva forte..."
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-          numberOfLines={2}
-          style={{ marginTop: spacing.md, textAlignVertical: 'top' } as any}
+        <Controller
+          control={control}
+          name="notes"
+          render={({ field: { value, onChange } }) => (
+            <AppInput
+              label="Observação (opcional)"
+              placeholder="Ex: Surge duplo, chuva forte..."
+              value={value ?? ''}
+              onChangeText={onChange}
+              error={errors.notes?.message}
+              multiline
+              numberOfLines={2}
+              style={{ marginTop: spacing.md, textAlignVertical: 'top' } as any}
+            />
+          )}
         />
 
-        {/* 4. BOTÃO SALVAR */}
         <AppButton
           title={isEditing ? 'Salvar Alterações' : 'Adicionar Receita'}
           size="lg"
-          onPress={handleSave}
+          onPress={handleSubmit(onSubmit)}
           style={{ marginTop: spacing.xl }}
-          disabled={!amount || !selectedSource}
+          disabled={!isValid || isSubmitting}
         />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -230,4 +242,5 @@ const styles = StyleSheet.create({
     minHeight: 50,
   },
   dateText: { fontSize: 14, fontWeight: '500' },
+  fieldError: { fontSize: 12, marginTop: 4, marginBottom: 4 },
 });

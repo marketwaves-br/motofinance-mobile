@@ -113,7 +113,31 @@ export const initDatabase = async () => {
     try {
       await db.execAsync(`ALTER TABLE expense_categories ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;`);
     } catch { /* coluna já existe */ }
-    
+
+    // Índices de performance (idempotentes via IF NOT EXISTS).
+    // Justificativa: SQLite não cria índice automático em FK nem em colunas de data.
+    // Com ~3k+ transações (1 ano de uso real) os reports passam a fazer full scan
+    // e nested-loop join — estes índices trazem custo O(log n) onde era O(n).
+    await db.execAsync(`
+      -- Filtros por período em BETWEEN (today summary, reports, breakdowns)
+      CREATE INDEX IF NOT EXISTS idx_incomes_received_at ON incomes(received_at);
+      CREATE INDEX IF NOT EXISTS idx_expenses_spent_at ON expenses(spent_at);
+
+      -- JOINs em reports (bySource / byCategory)
+      CREATE INDEX IF NOT EXISTS idx_incomes_source_id ON incomes(source_id);
+      CREATE INDEX IF NOT EXISTS idx_expenses_category_id ON expenses(category_id);
+
+      -- Listagem de chips: WHERE is_active = 1 ORDER BY sort_order
+      CREATE INDEX IF NOT EXISTS idx_income_sources_active_order
+        ON income_sources(is_active, sort_order);
+      CREATE INDEX IF NOT EXISTS idx_expense_categories_active_order
+        ON expense_categories(is_active, sort_order);
+
+      -- Metas ativas por período (GoalsRepository)
+      CREATE INDEX IF NOT EXISTS idx_financial_goals_period_type
+        ON financial_goals(period, goal_type, is_active);
+    `);
+
     // Auto-seed data
     await runSeed(db);
     

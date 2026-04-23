@@ -694,7 +694,7 @@ export default function ReportsScreen() {
               <View style={[styles.section, { marginBottom: 24 }]}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Evolução Diária</Text>
                 <ScrollView nestedScrollEnabled style={{ maxHeight: 380 }}>
-                  {dailyData.map(day => {
+                  {[...dailyData].reverse().map(day => {
                     const [, month, dayNum] = day.dateKey.split('-');
                     const label  = `${dayNum}/${month}`;
                     const incPct = (day.incomeCents  / dailyMax) * 100;
