@@ -12,6 +12,7 @@ interface AppButtonProps {
   style?: ViewStyle;
   textStyle?: TextStyle;
   icon?: React.ReactNode;
+  testID?: string;
 }
 
 export function AppButton({
@@ -24,6 +25,7 @@ export function AppButton({
   style,
   textStyle,
   icon,
+  testID,
 }: AppButtonProps) {
   const { colors, spacing, radius } = useTheme();
 
@@ -72,6 +74,7 @@ export function AppButton({
 
   return (
     <TouchableOpacity
+      testID={testID}
       style={[
         styles.baseButton,
         { borderRadius: radius.md },

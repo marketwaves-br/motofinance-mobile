@@ -1,13 +1,62 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Component, ReactNode } from 'react';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '@/infrastructure/db/sqlite';
-import { View } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/theme';
 import { useAppStore } from '@/stores/app-store';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 SplashScreen.preventAutoHideAsync();
+
+// ─── Error Boundary ───────────────────────────────────────────────────────────
+
+interface ErrorBoundaryState { hasError: boolean; error: Error | null }
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: { componentStack: string }) {
+    console.error('[ErrorBoundary]', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={eb.container}>
+          <Text style={eb.emoji}>⚠️</Text>
+          <Text style={eb.title}>Algo deu errado</Text>
+          <Text style={eb.message}>{this.state.error?.message ?? 'Erro desconhecido'}</Text>
+          <TouchableOpacity
+            style={eb.btn}
+            onPress={() => this.setState({ hasError: false, error: null })}
+          >
+            <Text style={eb.btnText}>Tentar novamente</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const eb = StyleSheet.create({
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: '#fff' },
+  emoji:     { fontSize: 48, marginBottom: 16 },
+  title:     { fontSize: 20, fontWeight: '700', marginBottom: 8, color: '#1e293b' },
+  message:   { fontSize: 13, color: '#64748b', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  btn:       { backgroundColor: '#10B981', paddingHorizontal: 28, paddingVertical: 12, borderRadius: 10 },
+  btnText:   { color: '#fff', fontWeight: '700', fontSize: 15 },
+});
+
+// ─── Root Layout ──────────────────────────────────────────────────────────────
 
 export default function RootLayout() {
   const [dbIsReady, setDbIsReady] = useState(false);
@@ -42,6 +91,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <AppErrorBoundary>
       <Stack>
         <Stack.Screen name="index" options={{ title: 'MotoFinance', headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -54,6 +104,7 @@ export default function RootLayout() {
         <Stack.Screen name="(modals)/manage-categories" options={{ presentation: 'modal', title: 'Categorias de Despesa', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
         <Stack.Screen name="(modals)/manage-goals" options={{ presentation: 'modal', title: 'Metas Mensais', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
       </Stack>
+      </AppErrorBoundary>
     </GestureHandlerRootView>
   );
 }

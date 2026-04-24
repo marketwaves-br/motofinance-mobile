@@ -2,6 +2,14 @@ import { getDatabase } from '@/infrastructure/db/sqlite';
 import * as Crypto from 'expo-crypto';
 import type { UnifiedTransaction, TransactionSection } from '@/types/transaction';
 
+export interface PagedTransactionResult {
+  sections: TransactionSection[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+const PAGE_SIZE_DEFAULT = 50;
+
 export class TransactionsRepository {
   // Utility for getting the start and end of today in ISO UTC
   private static getTodayISO() {
@@ -227,15 +235,42 @@ export class TransactionsRepository {
   }
 
   /**
-   * Retorna transações (receitas + despesas) agrupadas por dia.
-   * Se start/end forem fornecidos, filtra pelo intervalo; caso contrário retorna todo o histórico.
+   * Retorna transações (receitas + despesas) agrupadas por dia, com paginação cursor-based.
+   *
+   * @param start  - início do intervalo (opcional)
+   * @param end    - fim do intervalo (opcional)
+   * @param opts   - paginação: limit (padrão 50) + before (cursor ISO da última linha da página anterior)
+   *
+   * Retorna { sections, hasMore, nextCursor }.
+   * nextCursor é o ISO date da última transação retornada — passar como `before` na próxima página.
    */
-  static async getTransactionHistory(start?: Date, end?: Date): Promise<TransactionSection[]> {
-    const db = await getDatabase();
-    const hasFilter = start !== undefined && end !== undefined;
-    const startISO  = hasFilter ? start!.toISOString() : null;
-    const endISO    = hasFilter ? end!.toISOString()   : null;
+  static async getTransactionHistory(
+    start?: Date,
+    end?: Date,
+    opts?: { limit?: number; before?: string },
+  ): Promise<PagedTransactionResult> {
+    const db     = await getDatabase();
+    const LIMIT  = opts?.limit ?? PAGE_SIZE_DEFAULT;
+    const before = opts?.before ?? null;
 
+    const hasRangeFilter = start !== undefined && end !== undefined;
+    const startISO = hasRangeFilter ? start!.toISOString() : null;
+    const endISO   = hasRangeFilter ? end!.toISOString()   : null;
+    const hasCursor = before !== null;
+
+    // Monta cláusula WHERE e parâmetros para cada branch do UNION ALL
+    const buildBranch = (dateCol: string): { where: string; params: (string | null)[] } => {
+      const conds: string[]           = [];
+      const params: (string | null)[] = [];
+      if (hasRangeFilter) { conds.push(`${dateCol} BETWEEN ? AND ?`); params.push(startISO, endISO); }
+      if (hasCursor)      { conds.push(`${dateCol} < ?`);             params.push(before); }
+      return { where: conds.length ? `WHERE ${conds.join(' AND ')}` : '', params };
+    };
+
+    const inc = buildBranch('i.received_at');
+    const exp = buildBranch('e.spent_at');
+
+    // Busca LIMIT+1 para detectar hasMore sem query extra
     const rows = await db.getAllAsync<{
       id: string;
       type: string;
@@ -252,18 +287,25 @@ export class TransactionsRepository {
         s.name as label, s.color, s.icon, i.notes, i.source_id as ref_id
       FROM incomes i
       JOIN income_sources s ON i.source_id = s.id
-      ${hasFilter ? 'WHERE i.received_at BETWEEN ? AND ?' : ''}
+      ${inc.where}
       UNION ALL
       SELECT
         e.id, 'expense' as type, e.amount_cents, e.spent_at as date,
         c.name as label, c.color, c.icon, e.notes, e.category_id as ref_id
       FROM expenses e
       JOIN expense_categories c ON e.category_id = c.id
-      ${hasFilter ? 'WHERE e.spent_at BETWEEN ? AND ?' : ''}
+      ${exp.where}
       ORDER BY date DESC
-    `, hasFilter ? [startISO, endISO, startISO, endISO] : []);
+      LIMIT ?
+    `, [...inc.params, ...exp.params, LIMIT + 1]);
 
-    // Agrupar por dia em horário local (evita bug UTC-3)
+    const hasMore    = rows.length > LIMIT;
+    if (hasMore) rows.pop();                                              // descarta sentinela
+    const nextCursor = hasMore && rows.length > 0
+      ? rows[rows.length - 1].date
+      : null;
+
+    // Agrupa por dia em horário local (evita bug UTC-3)
     const grouped = new Map<string, UnifiedTransaction[]>();
     for (const row of rows) {
       const dk = new Date(row.date).toLocaleDateString('en-CA');
@@ -281,9 +323,9 @@ export class TransactionsRepository {
       });
     }
 
-    const today     = new Date();
-    const todayKey  = today.toLocaleDateString('en-CA');
-    const yesterday = new Date(today);
+    const today        = new Date();
+    const todayKey     = today.toLocaleDateString('en-CA');
+    const yesterday    = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayKey = yesterday.toLocaleDateString('en-CA');
 
@@ -298,7 +340,8 @@ export class TransactionsRepository {
       }
       sections.push({ title, dateKey: dk, data: transactions });
     }
-    return sections;
+
+    return { sections, hasMore, nextCursor };
   }
 }
 

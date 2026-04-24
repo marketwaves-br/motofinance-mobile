@@ -3,12 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   RefreshControl,
   Alert,
   TouchableOpacity,
   Platform,
   ActivityIndicator,
+  ListRenderItemInfo,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useTheme } from '@/theme';
@@ -34,12 +35,35 @@ interface MonthSection {
   days: TransactionSection[];
 }
 
+// Item discriminado para o FlatList — cada item representa um "bloco" visual
+type ListItem =
+  | { kind: 'month'; month: MonthSection }
+  | { kind: 'day';   section: TransactionSection }
+  | { kind: 'flat';  items: UnifiedTransaction[] };
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const MONTHS_BR = [
   'Janeiro','Fevereiro','Março','Abril','Maio','Junho',
   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro',
 ];
+
+/** Mescla seções paginadas: se a dateKey já existe, concatena as transações. */
+function mergeSections(
+  existing: TransactionSection[],
+  incoming: TransactionSection[],
+): TransactionSection[] {
+  const result = [...existing];
+  for (const section of incoming) {
+    const idx = result.findIndex(s => s.dateKey === section.dateKey);
+    if (idx >= 0) {
+      result[idx] = { ...result[idx], data: [...result[idx].data, ...section.data] };
+    } else {
+      result.push(section);
+    }
+  }
+  return result;
+}
 
 const buildMonthSections = (
   sections: TransactionSection[],
@@ -49,22 +73,22 @@ const buildMonthSections = (
   for (const day of sections) {
     const filtered = filter === 'all' ? day.data : day.data.filter(t => t.type === filter);
     if (filtered.length === 0) continue;
-    const monthKey = day.dateKey.slice(0, 7);
-    if (!monthMap.has(monthKey)) {
-      const [year, month] = monthKey.split('-').map(Number);
-      monthMap.set(monthKey, {
-        monthKey,
+    const mk = day.dateKey.slice(0, 7);
+    if (!monthMap.has(mk)) {
+      const [year, month] = mk.split('-').map(Number);
+      monthMap.set(mk, {
+        monthKey: mk,
         title: `${MONTHS_BR[month - 1]} ${year}`,
         incomeCents: 0,
         expenseCents: 0,
         days: [],
       });
     }
-    const section = monthMap.get(monthKey)!;
-    section.days.push({ ...day, data: filtered });
+    const sec = monthMap.get(mk)!;
+    sec.days.push({ ...day, data: filtered });
     for (const t of filtered) {
-      if (t.type === 'income') section.incomeCents += t.amountCents;
-      else section.expenseCents += t.amountCents;
+      if (t.type === 'income') sec.incomeCents += t.amountCents;
+      else sec.expenseCents += t.amountCents;
     }
   }
   return Array.from(monthMap.entries())
@@ -74,6 +98,8 @@ const buildMonthSections = (
 
 const currentMonthKey = (): string =>
   new Date().toLocaleDateString('en-CA').slice(0, 7);
+
+const PAGE_SIZE = 50;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -87,10 +113,13 @@ export default function EntriesScreen() {
   const [showEndPicker,   setShowEndPicker]   = useState(false);
 
   // ── Transactions ─────────────────────────────────────────────────────────────
-  const [sections, setSections]     = useState<TransactionSection[]>([]);
-  const [filter, setFilter]         = useState<FilterType>('all');
-  const [refreshing, setRefreshing] = useState(false);
-  const [isLoading, setIsLoading]   = useState(true);
+  const [sections, setSections]         = useState<TransactionSection[]>([]);
+  const [filter,   setFilter]           = useState<FilterType>('all');
+  const [refreshing,   setRefreshing]   = useState(false);
+  const [isLoading,    setIsLoading]    = useState(true);
+  const [loadingMore,  setLoadingMore]  = useState(false);
+  const [hasMore,      setHasMore]      = useState(false);
+  const [nextCursor,   setNextCursor]   = useState<string | null>(null);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(
     () => new Set([currentMonthKey()])
   );
@@ -106,10 +135,7 @@ export default function EntriesScreen() {
     return null;
   }, [startDate, endDate]);
 
-  // ── View mode (controls grouping level) ──────────────────────────────────────
-  // flat   → 1 day:  plain list, no headers
-  // days   → 2-31:   day headers, no collapsing
-  // months → 32+:    collapsible month cards
+  // ── View mode ────────────────────────────────────────────────────────────────
   const viewMode = useMemo((): ViewMode => {
     const spanDays = Math.round(
       (endDate.getTime() - startDate.getTime()) / 86_400_000
@@ -119,7 +145,7 @@ export default function EntriesScreen() {
     return 'months';
   }, [startDate, endDate]);
 
-  // ── Derived data per view mode ────────────────────────────────────────────────
+  // ── Derived data ──────────────────────────────────────────────────────────────
   const monthSections = useMemo(
     () => buildMonthSections(sections, filter),
     [sections, filter]
@@ -127,10 +153,7 @@ export default function EntriesScreen() {
 
   const daySections = useMemo(() =>
     sections
-      .map(s => ({
-        ...s,
-        data: filter === 'all' ? s.data : s.data.filter(t => t.type === filter),
-      }))
+      .map(s => ({ ...s, data: filter === 'all' ? s.data : s.data.filter(t => t.type === filter) }))
       .filter(s => s.data.length > 0),
     [sections, filter]
   );
@@ -148,15 +171,28 @@ export default function EntriesScreen() {
     return monthSections.length > 0;
   }, [viewMode, flatItems, daySections, monthSections]);
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────────
+  // ── FlatList data — um item por bloco visual ──────────────────────────────────
+  const listData = useMemo((): ListItem[] => {
+    if (viewMode === 'months')
+      return monthSections.map(m => ({ kind: 'month', month: m }));
+    if (viewMode === 'days')
+      return daySections.map(s => ({ kind: 'day', section: s }));
+    // flat — apenas 1 item para todo o bloco (pode estar vazio)
+    return flatItems.length > 0 ? [{ kind: 'flat', items: flatItems }] : [];
+  }, [viewMode, monthSections, daySections, flatItems]);
+
+  // ── Fetch (primeira página) ───────────────────────────────────────────────────
   const fetchHistory = async () => {
     setIsLoading(true);
     try {
-      const data = await TransactionsRepository.getTransactionHistory(
+      const result = await TransactionsRepository.getTransactionHistory(
         startDate,
         endOfDay(endDate),
+        { limit: PAGE_SIZE },
       );
-      setSections(data);
+      setSections(result.sections);
+      setHasMore(result.hasMore);
+      setNextCursor(result.nextCursor);
     } catch (error) {
       console.error('Erro ao carregar histórico:', error);
     } finally {
@@ -172,6 +208,26 @@ export default function EntriesScreen() {
     setRefreshing(false);
   };
 
+  // ── Carregar mais (próxima página) ────────────────────────────────────────────
+  const loadMore = useCallback(async () => {
+    if (!hasMore || loadingMore || !nextCursor) return;
+    setLoadingMore(true);
+    try {
+      const result = await TransactionsRepository.getTransactionHistory(
+        startDate,
+        endOfDay(endDate),
+        { limit: PAGE_SIZE, before: nextCursor },
+      );
+      setSections(prev => mergeSections(prev, result.sections));
+      setHasMore(result.hasMore);
+      setNextCursor(result.nextCursor);
+    } catch (err) {
+      console.error('Erro ao carregar mais:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, loadingMore, nextCursor, startDate, endDate]);
+
   // ── Preset + month toggle ─────────────────────────────────────────────────────
   const applyPreset = (preset: 'today' | 'week' | 'month') => {
     setIsLoading(true);
@@ -182,16 +238,12 @@ export default function EntriesScreen() {
     setExpandedMonths(new Set([currentMonthKey()]));
   };
 
-  const toggleMonth = (monthKey: string) => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setExpandedMonths(prev => {
-        const next = new Set(prev);
-        next.has(monthKey) ? next.delete(monthKey) : next.add(monthKey);
-        return next;
-      });
-      setIsLoading(false);
-    }, 50);
+  const toggleMonth = (mk: string) => {
+    setExpandedMonths(prev => {
+      const next = new Set(prev);
+      next.has(mk) ? next.delete(mk) : next.add(mk);
+      return next;
+    });
   };
 
   // ── Transaction actions ───────────────────────────────────────────────────────
@@ -236,17 +288,14 @@ export default function EntriesScreen() {
               },
             }),
         },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: () => confirmDelete(item),
-        },
+        { text: 'Excluir', style: 'destructive', onPress: () => confirmDelete(item) },
         { text: 'Cancelar', style: 'cancel' },
       ]
     );
   };
 
   // ── Render helpers ────────────────────────────────────────────────────────────
+
   const renderTransaction = (item: UnifiedTransaction) => {
     const isIncome    = item.type === 'income';
     const amountColor = isIncome ? colors.income : colors.expense;
@@ -293,11 +342,103 @@ export default function EntriesScreen() {
     return (
       <View style={[styles.dayHeader, { borderBottomColor: colors.border }]}>
         <Text style={[styles.dayTitle, { color: colors.text }]}>{title}</Text>
-        <Text style={[styles.dayNet, {
-          color: dayNet >= 0 ? colors.income : colors.expense,
-        }]}>
+        <Text style={[styles.dayNet, { color: dayNet >= 0 ? colors.income : colors.expense }]}>
           {dayNet >= 0 ? '+' : ''}{formatBRL(dayNet)}
         </Text>
+      </View>
+    );
+  };
+
+  // Renderiza um item do FlatList conforme seu kind
+  const renderItem = ({ item }: ListRenderItemInfo<ListItem>) => {
+    if (item.kind === 'flat') {
+      return (
+        <View style={[styles.monthBody, { borderColor: colors.border, borderRadius: radius.md }]}>
+          {item.items.map(t => renderTransaction(t))}
+        </View>
+      );
+    }
+
+    if (item.kind === 'day') {
+      const s = item.section;
+      return (
+        <View style={[styles.monthBody, { borderColor: colors.border, borderRadius: radius.md }]}>
+          {renderDayHeader(s.title, s.data)}
+          {s.data.map(t => renderTransaction(t))}
+        </View>
+      );
+    }
+
+    // kind === 'month'
+    const month      = item.month;
+    const isExpanded = expandedMonths.has(month.monthKey);
+    const net        = month.incomeCents - month.expenseCents;
+    const netColor   = net >= 0 ? colors.income : colors.expense;
+
+    return (
+      <View style={styles.monthSection}>
+        <TouchableOpacity
+          onPress={() => toggleMonth(month.monthKey)}
+          activeOpacity={0.75}
+          style={[styles.monthHeader, {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderBottomLeftRadius:  isExpanded ? 0 : radius.md,
+            borderBottomRightRadius: isExpanded ? 0 : radius.md,
+            borderTopLeftRadius:  radius.md,
+            borderTopRightRadius: radius.md,
+          }]}
+        >
+          <View style={styles.monthHeaderTopRow}>
+            <View style={styles.monthHeaderLeft}>
+              <Ionicons
+                name={isExpanded ? 'chevron-down' : 'chevron-forward'}
+                size={15}
+                color={colors.muted}
+                style={{ marginRight: 6 }}
+              />
+              <Text style={[styles.monthTitle, { color: colors.text }]}>{month.title}</Text>
+            </View>
+            <Text style={[styles.monthNet, { color: netColor }]}>
+              {net >= 0 ? '+' : ''}{formatBRL(net)}
+            </Text>
+          </View>
+          <View style={styles.monthHeaderBottomRow}>
+            <Text style={[styles.monthIncome, { color: colors.income, marginLeft: 21 }]}>
+              +{formatBRL(month.incomeCents)}
+            </Text>
+            <Text style={[styles.monthIncome, { color: colors.expense }]}>
+              -{formatBRL(month.expenseCents)}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {isExpanded && (
+          <View style={[styles.monthBody, {
+            borderColor: colors.border,
+            borderBottomLeftRadius:  radius.md,
+            borderBottomRightRadius: radius.md,
+          }]}>
+            {month.days.map(day => {
+              const dayIncome  = day.data.filter(t => t.type === 'income').reduce((s, t) => s + t.amountCents, 0);
+              const dayExpense = day.data.filter(t => t.type === 'expense').reduce((s, t) => s + t.amountCents, 0);
+              const dayNet     = dayIncome - dayExpense;
+              return (
+                <View key={day.dateKey}>
+                  <View style={[styles.dayHeader, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.dayTitle, { color: colors.text }]}>{day.title}</Text>
+                    <Text style={[styles.dayNet, {
+                      color: dayNet >= 0 ? colors.income : colors.expense,
+                    }]}>
+                      {dayNet >= 0 ? '+' : ''}{formatBRL(dayNet)}
+                    </Text>
+                  </View>
+                  {day.data.map(t => renderTransaction(t))}
+                </View>
+              );
+            })}
+          </View>
+        )}
       </View>
     );
   };
@@ -318,123 +459,141 @@ export default function EntriesScreen() {
     };
   };
 
+  // ── Sub-componentes para ListHeaderComponent / Empty / Footer ─────────────────
+
+  const ListHeader = (
+    <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
+      <Text style={[styles.headerTitle, { color: colors.text }]}>Lançamentos</Text>
+
+      {/* Period pills */}
+      <View style={styles.pillRow}>
+        {(['today', 'week', 'month'] as const).map(p => {
+          const labels = { today: 'Hoje', week: 'Semana', month: 'Mês' };
+          const isActive = activePreset === p;
+          return (
+            <TouchableOpacity
+              key={p}
+              onPress={() => applyPreset(p)}
+              style={[styles.pill, {
+                backgroundColor: isActive ? colors.primary : colors.surface,
+                borderColor:     isActive ? colors.primary : colors.border,
+              }]}
+            >
+              <Text style={[styles.pillText, { color: isActive ? '#fff' : colors.muted }]}>
+                {labels[p]}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Custom date range */}
+      <View style={styles.dateRangeRow}>
+        <TouchableOpacity
+          style={[styles.dateBtn, {
+            backgroundColor: colors.surface,
+            borderColor: activePreset ? colors.border : colors.primary,
+            borderRadius: radius.md,
+          }]}
+          onPress={() => setShowStartPicker(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="calendar-outline" size={14}
+            color={activePreset ? colors.muted : colors.primary} />
+          <Text style={[styles.dateBtnText, { color: activePreset ? colors.text : colors.primary }]}>
+            {formatDateBR(startDate)}
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={[styles.dateRangeSep, { color: colors.muted }]}>até</Text>
+
+        <TouchableOpacity
+          style={[styles.dateBtn, {
+            backgroundColor: colors.surface,
+            borderColor: activePreset ? colors.border : colors.primary,
+            borderRadius: radius.md,
+          }]}
+          onPress={() => setShowEndPicker(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="calendar-outline" size={14}
+            color={activePreset ? colors.muted : colors.primary} />
+          <Text style={[styles.dateBtnText, { color: activePreset ? colors.text : colors.primary }]}>
+            {formatDateBR(endDate)}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Type filters */}
+      <View style={styles.filterRow}>
+        {(['all', 'income', 'expense'] as FilterType[]).map(f => {
+          const labels: Record<FilterType, string> = {
+            all: 'Tudo', income: '↑ Receitas', expense: '↓ Despesas',
+          };
+          const isActive = filter === f;
+          const fc = filterColor(f);
+          return (
+            <TouchableOpacity
+              key={f}
+              onPress={() => { if (filter !== f) setFilter(f); }}
+              style={[styles.filterPill, {
+                backgroundColor: isActive ? fc : colors.surface,
+                borderColor:     isActive ? fc : colors.border,
+              }]}
+            >
+              <Text style={[styles.filterPillText, { color: isActive ? '#fff' : colors.muted }]}>
+                {labels[f]}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {hasData && (
+        <View style={styles.hintRow}>
+          <Ionicons name="information-circle-outline" size={14} color="#E67E22" />
+          <Text style={[styles.hintText, { color: colors.icon }]}>
+            Segure um item para editar ou excluir
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+
+  const ListEmpty = !isLoading ? (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="receipt-outline" size={64} color={colors.muted} />
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>
+        {emptyLabel().title}
+      </Text>
+      <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
+        {emptyLabel().sub}
+      </Text>
+    </View>
+  ) : null;
+
+  const ListFooter = loadingMore ? (
+    <View style={styles.footerLoader}>
+      <ActivityIndicator size="small" color={colors.primary} />
+    </View>
+  ) : !hasMore && sections.length > 0 ? (
+    <Text style={[styles.footerEnd, { color: colors.muted }]}>
+      Todos os registros carregados
+    </Text>
+  ) : null;
+
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
-      {/* Loading overlay — spinner sobre a tela durante qualquer busca */}
+      {/* Loading overlay */}
       {isLoading && (
         <View style={styles.loadingOverlay} pointerEvents="box-only">
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}
 
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Lançamentos</Text>
-
-        {/* Period pills */}
-        <View style={styles.pillRow}>
-          {(['today', 'week', 'month'] as const).map(p => {
-            const labels = { today: 'Hoje', week: 'Semana', month: 'Mês' };
-            const isActive = activePreset === p;
-            return (
-              <TouchableOpacity
-                key={p}
-                onPress={() => applyPreset(p)}
-                style={[styles.pill, {
-                  backgroundColor: isActive ? colors.primary : colors.surface,
-                  borderColor:     isActive ? colors.primary : colors.border,
-                }]}
-              >
-                <Text style={[styles.pillText, { color: isActive ? '#fff' : colors.muted }]}>
-                  {labels[p]}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Custom date range */}
-        <View style={styles.dateRangeRow}>
-          <TouchableOpacity
-            style={[styles.dateBtn, {
-              backgroundColor: colors.surface,
-              borderColor: activePreset ? colors.border : colors.primary,
-              borderRadius: radius.md,
-            }]}
-            onPress={() => setShowStartPicker(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="calendar-outline" size={14}
-              color={activePreset ? colors.muted : colors.primary} />
-            <Text style={[styles.dateBtnText, { color: activePreset ? colors.text : colors.primary }]}>
-              {formatDateBR(startDate)}
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={[styles.dateRangeSep, { color: colors.muted }]}>até</Text>
-
-          <TouchableOpacity
-            style={[styles.dateBtn, {
-              backgroundColor: colors.surface,
-              borderColor: activePreset ? colors.border : colors.primary,
-              borderRadius: radius.md,
-            }]}
-            onPress={() => setShowEndPicker(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="calendar-outline" size={14}
-              color={activePreset ? colors.muted : colors.primary} />
-            <Text style={[styles.dateBtnText, { color: activePreset ? colors.text : colors.primary }]}>
-              {formatDateBR(endDate)}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Type filters */}
-        <View style={styles.filterRow}>
-          {(['all', 'income', 'expense'] as FilterType[]).map(f => {
-            const labels: Record<FilterType, string> = {
-              all: 'Tudo', income: '↑ Receitas', expense: '↓ Despesas',
-            };
-            const isActive = filter === f;
-            const fc = filterColor(f);
-            return (
-              <TouchableOpacity
-                key={f}
-                onPress={() => {
-                  if (filter === f) return;
-                  setIsLoading(true);
-                  setTimeout(() => {
-                    setFilter(f);
-                    setIsLoading(false);
-                  }, 50);
-                }}
-                style={[styles.filterPill, {
-                  backgroundColor: isActive ? fc : colors.surface,
-                  borderColor:     isActive ? fc : colors.border,
-                }]}
-              >
-                <Text style={[styles.filterPillText, { color: isActive ? '#fff' : colors.muted }]}>
-                  {labels[f]}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {hasData && (
-          <View style={styles.hintRow}>
-            <Ionicons name="information-circle-outline" size={14} color="#E67E22" />
-            <Text style={[styles.hintText, { color: colors.icon }]}>
-              Segure um item para editar ou excluir
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Date pickers */}
+      {/* Date pickers (fora do FlatList para não scrollar com o conteúdo) */}
       {showStartPicker && (
         <DateTimePicker
           value={startDate}
@@ -443,10 +602,7 @@ export default function EntriesScreen() {
           maximumDate={endDate}
           onChange={(_: DateTimePickerEvent, d?: Date) => {
             setShowStartPicker(false);
-            if (d) {
-              setIsLoading(true);
-              setStartDate(startOfDay(d));
-            }
+            if (d) { setIsLoading(true); setStartDate(startOfDay(d)); }
           }}
         />
       )}
@@ -459,140 +615,33 @@ export default function EntriesScreen() {
           maximumDate={new Date()}
           onChange={(_: DateTimePickerEvent, d?: Date) => {
             setShowEndPicker(false);
-            if (d) {
-              setIsLoading(true);
-              setEndDate(startOfDay(d));
-            }
+            if (d) { setIsLoading(true); setEndDate(startOfDay(d)); }
           }}
         />
       )}
 
-      {/* ── List ──────────────────────────────────────────────────────────────── */}
-      <ScrollView
+      <FlatList<ListItem>
+        data={listData}
+        keyExtractor={item =>
+          item.kind === 'month' ? `month-${item.month.monthKey}` :
+          item.kind === 'day'   ? `day-${item.section.dateKey}`  : 'flat'
+        }
+        renderItem={renderItem}
+        ListHeaderComponent={ListHeader}
+        ListEmptyComponent={ListEmpty}
+        ListFooterComponent={ListFooter}
         contentContainerStyle={[
           { paddingHorizontal: spacing.lg, paddingBottom: 100, paddingTop: 8 },
-          !hasData && styles.emptyListContent,
+          !hasData && !isLoading && styles.emptyListContent,
         ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
-      >
-        {!hasData && !isLoading ? (
-          /* ── Empty state ── */
-          <View style={styles.emptyContainer}>
-            <Ionicons name="receipt-outline" size={64} color={colors.muted} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>
-              {emptyLabel().title}
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
-              {emptyLabel().sub}
-            </Text>
-          </View>
-
-        ) : viewMode === 'flat' ? (
-          /* ── Flat: 1 day, no headers ── */
-          <View style={[styles.monthBody, {
-            borderColor: colors.border,
-            borderRadius: radius.md,
-          }]}>
-            {flatItems.map(item => renderTransaction(item))}
-          </View>
-
-        ) : viewMode === 'days' ? (
-          /* ── Days: 2-31 days, grouped by day, no collapsing ── */
-          <View style={[styles.monthBody, {
-            borderColor: colors.border,
-            borderRadius: radius.md,
-          }]}>
-            {daySections.map(day => (
-              <View key={day.dateKey}>
-                {renderDayHeader(day.title, day.data)}
-                {day.data.map(item => renderTransaction(item))}
-              </View>
-            ))}
-          </View>
-
-        ) : (
-          /* ── Months: 32+ days, collapsible month cards ── */
-          monthSections.map(month => {
-            const isExpanded = expandedMonths.has(month.monthKey);
-            const net        = month.incomeCents - month.expenseCents;
-            const netColor   = net >= 0 ? colors.income : colors.expense;
-            return (
-              <View key={month.monthKey} style={styles.monthSection}>
-
-                {/* Month card header */}
-                <TouchableOpacity
-                  onPress={() => toggleMonth(month.monthKey)}
-                  activeOpacity={0.75}
-                  style={[styles.monthHeader, {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                    borderBottomLeftRadius:  isExpanded ? 0 : radius.md,
-                    borderBottomRightRadius: isExpanded ? 0 : radius.md,
-                    borderTopLeftRadius:  radius.md,
-                    borderTopRightRadius: radius.md,
-                  }]}
-                >
-                  {/* Top row: Month Year (left) + Net result (right) */}
-                  <View style={styles.monthHeaderTopRow}>
-                    <View style={styles.monthHeaderLeft}>
-                      <Ionicons
-                        name={isExpanded ? 'chevron-down' : 'chevron-forward'}
-                        size={15}
-                        color={colors.muted}
-                        style={{ marginRight: 6 }}
-                      />
-                      <Text style={[styles.monthTitle, { color: colors.text }]}>{month.title}</Text>
-                    </View>
-                    <Text style={[styles.monthNet, { color: netColor }]}>
-                      {net >= 0 ? '+' : ''}{formatBRL(net)}
-                    </Text>
-                  </View>
-                  {/* Bottom row: Income (left) + Expense (right) */}
-                  <View style={styles.monthHeaderBottomRow}>
-                    <Text style={[styles.monthIncome, { color: colors.income, marginLeft: 21 }]}>
-                      +{formatBRL(month.incomeCents)}
-                    </Text>
-                    <Text style={[styles.monthIncome, { color: colors.expense }]}>
-                      -{formatBRL(month.expenseCents)}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-
-                {/* Expanded days */}
-                {isExpanded && (
-                  <View style={[styles.monthBody, {
-                    borderColor: colors.border,
-                    borderBottomLeftRadius:  radius.md,
-                    borderBottomRightRadius: radius.md,
-                  }]}>
-                    {month.days.map(day => {
-                      const dayIncome  = day.data.filter(t => t.type === 'income').reduce((s, t) => s + t.amountCents, 0);
-                      const dayExpense = day.data.filter(t => t.type === 'expense').reduce((s, t) => s + t.amountCents, 0);
-                      const dayNet     = dayIncome - dayExpense;
-                      return (
-                        <View key={day.dateKey}>
-                          <View style={[styles.dayHeader, { borderBottomColor: colors.border }]}>
-                            <Text style={[styles.dayTitle, { color: colors.text }]}>{day.title}</Text>
-                            <Text style={[styles.dayNet, {
-                              color: dayNet >= 0 ? colors.income : colors.expense,
-                            }]}>
-                              {dayNet >= 0 ? '+' : ''}{formatBRL(dayNet)}
-                            </Text>
-                          </View>
-                          {day.data.map(item => renderTransaction(item))}
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.3}
+        // Evita re-renders desnecessários ao expandir/colapsar meses
+        extraData={expandedMonths}
+      />
     </View>
   );
 }
@@ -604,7 +653,6 @@ const styles = StyleSheet.create({
   header:      { paddingTop: 56, paddingBottom: 12 },
   headerTitle: { fontSize: 28, fontWeight: 'bold' },
 
-  // Period pills
   pillRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   pill: {
     paddingHorizontal: 16,
@@ -614,7 +662,6 @@ const styles = StyleSheet.create({
   },
   pillText: { fontSize: 14, fontWeight: '600' },
 
-  // Date range
   dateRangeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   dateBtn: {
     flexDirection: 'row',
@@ -627,7 +674,6 @@ const styles = StyleSheet.create({
   dateBtnText:  { fontSize: 13, fontWeight: '500' },
   dateRangeSep: { fontSize: 13 },
 
-  // Type filters
   filterRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   filterPill: {
     paddingHorizontal: 14,
@@ -637,11 +683,9 @@ const styles = StyleSheet.create({
   },
   filterPillText: { fontSize: 13, fontWeight: '600' },
 
-  // Hint
   hintRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10, opacity: 0.7 },
   hintText: { fontSize: 12, fontStyle: 'italic' },
 
-  // Month card
   monthSection: { marginBottom: 12 },
   monthHeader: {
     flexDirection: 'column',
@@ -657,7 +701,6 @@ const styles = StyleSheet.create({
   monthIncome: { fontSize: 12, fontWeight: '600' },
   monthNet:    { fontSize: 14, fontWeight: '700' },
 
-  // Month body (shared by months+days+flat modes)
   monthBody: {
     borderLeftWidth: 1,
     borderRightWidth: 1,
@@ -666,7 +709,6 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
 
-  // Day header
   dayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -678,7 +720,6 @@ const styles = StyleSheet.create({
   dayTitle: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
   dayNet:   { fontSize: 13, fontWeight: '600' },
 
-  // Transaction row
   transactionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -699,13 +740,14 @@ const styles = StyleSheet.create({
   transactionAmount: { fontSize: 15, fontWeight: '700' },
   colorDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 4 },
 
-  // Empty state
   emptyContainer:   { alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 12 },
   emptyTitle:       { fontSize: 18, fontWeight: '600' },
   emptySubtitle:    { fontSize: 14, textAlign: 'center', lineHeight: 20 },
   emptyListContent: { flexGrow: 1 },
 
-  // Loading overlay
+  footerLoader: { paddingVertical: 20, alignItems: 'center' },
+  footerEnd:    { textAlign: 'center', paddingVertical: 16, fontSize: 12 },
+
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.18)',

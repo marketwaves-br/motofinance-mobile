@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc:*)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(npm install *)",
+      "Bash(npx jest *)",
+      "Skill(update-config)",
+      "Skill(update-config:*)"
     ]
   }
 }

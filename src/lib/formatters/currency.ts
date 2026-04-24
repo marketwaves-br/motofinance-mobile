@@ -4,7 +4,7 @@
  * A máscara de entrada "R$ 1.234,56" é uma camada de UI apenas.
  */
 
-const MAX_CENTS = 999_999_999_99;
+const MAX_CENTS = 999_999_999_999;
 
 /**
  * Formata centavos para string BRL canônica via Intl.
@@ -36,7 +36,7 @@ export const centsToMaskedBRL = (cents: number): string => {
 export const applyBRLMask = (text: string): string => {
   const numeric = text.replace(/\D/g, '');
   if (!numeric) return '';
-  const capped = numeric.slice(0, 11);
+  const capped = numeric.slice(0, 12);
   return centsToMaskedBRL(parseInt(capped, 10));
 };
 

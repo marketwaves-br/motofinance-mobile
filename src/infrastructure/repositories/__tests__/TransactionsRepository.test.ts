@@ -141,7 +141,9 @@ describe('getTransactionHistory', () => {
 
     const result = await TransactionsRepository.getTransactionHistory();
 
-    expect(result).toHaveLength(0);
+    expect(result.sections).toHaveLength(0);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeNull();
   });
 
   it('agrupa transações do mesmo dia local na mesma seção', async () => {
@@ -152,8 +154,8 @@ describe('getTransactionHistory', () => {
 
     const result = await TransactionsRepository.getTransactionHistory();
 
-    expect(result).toHaveLength(1);
-    expect(result[0].data).toHaveLength(2);
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0].data).toHaveLength(2);
   });
 
   it('cria seções separadas para dias diferentes', async () => {
@@ -164,7 +166,7 @@ describe('getTransactionHistory', () => {
 
     const result = await TransactionsRepository.getTransactionHistory();
 
-    expect(result).toHaveLength(2);
+    expect(result.sections).toHaveLength(2);
   });
 
   it('passa start/end como parâmetros SQL quando fornecidos', async () => {
@@ -179,12 +181,54 @@ describe('getTransactionHistory', () => {
     expect(params).toContain(end.toISOString());
   });
 
-  it('não passa parâmetros SQL quando start/end omitidos', async () => {
+  it('não passa parâmetros de range quando start/end omitidos', async () => {
     mockDb.getAllAsync.mockResolvedValue([]);
 
     await TransactionsRepository.getTransactionHistory();
 
+    // Sem range e sem cursor, o único param é o LIMIT+1 (50 + 1 = 51)
     const [, params] = mockDb.getAllAsync.mock.calls[0];
-    expect(params).toEqual([]);
+    expect(params).toEqual([51]);
+  });
+
+  it('passa cursor "before" como parâmetro SQL quando fornecido', async () => {
+    mockDb.getAllAsync.mockResolvedValue([]);
+    const before = '2026-04-15T12:00:00.000Z';
+
+    await TransactionsRepository.getTransactionHistory(undefined, undefined, { before });
+
+    const [, params] = mockDb.getAllAsync.mock.calls[0];
+    expect(params).toContain(before);
+  });
+
+  it('detecta hasMore quando SQL retorna LIMIT+1 linhas', async () => {
+    const fiftyOneRows = Array.from({ length: 51 }, (_, i) =>
+      makeRow({
+        id:   `row-${i}`,
+        date: `2026-04-${String(20 - Math.floor(i / 3)).padStart(2, '0')}T10:00:00.000Z`,
+      })
+    );
+    mockDb.getAllAsync.mockResolvedValue(fiftyOneRows);
+
+    const result = await TransactionsRepository.getTransactionHistory(
+      undefined, undefined, { limit: 50 }
+    );
+
+    expect(result.hasMore).toBe(true);
+    expect(result.nextCursor).not.toBeNull();
+    // Sentinela removida — exatamente 50 transações
+    const total = result.sections.reduce((acc, s) => acc + s.data.length, 0);
+    expect(total).toBe(50);
+  });
+
+  it('nextCursor é null quando não há mais páginas', async () => {
+    mockDb.getAllAsync.mockResolvedValue([
+      makeRow({ id: 'only', date: '2026-04-20T10:00:00.000Z' }),
+    ]);
+
+    const result = await TransactionsRepository.getTransactionHistory();
+
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeNull();
   });
 });

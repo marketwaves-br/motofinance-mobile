@@ -101,7 +101,7 @@ describe('parseBRLToCents', () => {
   });
 
   it('respeita MAX_CENTS', () => {
-    const maxMasked = 'R$ 9.999.999.999,99'; // 999_999_999_99 centavos
-    expect(parseBRLToCents(maxMasked)).toBe(999_999_999_99);
+    const maxMasked = 'R$ 9.999.999.999,99';
+    expect(parseBRLToCents(maxMasked)).toBe(999_999_999_999);
   });
 });
