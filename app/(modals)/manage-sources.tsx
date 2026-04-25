@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, StyleSheet, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme';
+import { AppInput } from '@/components/ui/AppInput';
+import { AppButton } from '@/components/ui/AppButton';
 import { IncomeSourcesRepository } from '@/infrastructure/repositories/IncomeSourcesRepository';
 
 type Source = {
@@ -10,53 +13,62 @@ type Source = {
 };
 
 export default function ManageSourcesModal() {
-  const { colors } = useTheme();
-  const [sources, setSources] = useState<Source[]>([]);
-  const [newName, setNewName] = useState('');
+  const { colors, spacing } = useTheme();
+  const [sources, setSources]   = useState<Source[]>([]);
+  const [newName, setNewName]   = useState('');
+  const [loading, setLoading]   = useState(false);
 
   const loadSources = async () => {
-    const data = await IncomeSourcesRepository.getAllSources();
-    setSources(data);
+    try {
+      const data = await IncomeSourcesRepository.getAllSources();
+      setSources(data);
+    } catch (e) {
+      console.error('Erro ao carregar fontes:', e);
+    }
   };
 
-  useEffect(() => {
-    loadSources();
-  }, []);
+  useEffect(() => { loadSources(); }, []);
 
   const handleAdd = async () => {
     const name = newName.trim();
     if (!name) return;
+    setLoading(true);
     try {
       await IncomeSourcesRepository.addSource(name);
       setNewName('');
-      loadSources();
+      await loadSources();
     } catch (e) {
-      Alert.alert('Erro', 'Não foi possível adicionar a empresa.');
+      console.error('Erro ao adicionar fonte:', e);
+      Alert.alert('Erro', 'Não foi possível adicionar a fonte.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleToggle = async (source: Source) => {
     try {
-      const newStatus = source.is_active === 1 ? false : true;
-      await IncomeSourcesRepository.toggleSourceActive(source.id, newStatus);
-      loadSources();
+      await IncomeSourcesRepository.toggleSourceActive(source.id, source.is_active !== 1);
+      await loadSources();
     } catch (e) {
-      Alert.alert('Erro', 'Não foi possível alterar o status da empresa.');
+      console.error('Erro ao alterar status da fonte:', e);
+      Alert.alert('Erro', 'Não foi possível alterar o status.');
     }
   };
 
   const renderItem = ({ item }: { item: Source }) => {
     const isActive = item.is_active === 1;
     return (
-      <View style={[styles.sourceItem, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.sourceName, { color: isActive ? colors.text : colors.icon }]}>
-          {item.name} {!isActive && '(Arquivo)'}
+      <View style={[styles.row, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.rowName, { color: isActive ? colors.text : colors.muted }]}>
+          {item.name}{!isActive && ' (Arquivado)'}
         </Text>
         <TouchableOpacity
           onPress={() => handleToggle(item)}
-          style={[styles.toggleBtn, { backgroundColor: isActive ? `${colors.danger}18` : `${colors.income}18` }]}
+          style={[styles.toggleBtn, {
+            backgroundColor: isActive ? `${colors.danger}18` : `${colors.income}18`,
+          }]}
         >
-          <Text style={{ color: isActive ? colors.danger : colors.income, fontWeight: 'bold' }}>
+          <Text style={{ color: isActive ? colors.danger : colors.income, fontWeight: '600' }}>
             {isActive ? 'Arquivar' : 'Reativar'}
           </Text>
         </TouchableOpacity>
@@ -65,37 +77,51 @@ export default function ManageSourcesModal() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.addSection}>
-        <TextInput
-          style={[styles.input, { borderColor: colors.border, color: colors.text }]}
-          placeholder="Fonte da Receita"
-          placeholderTextColor={colors.icon}
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={['bottom']}
+    >
+      <View style={[styles.addSection, { paddingHorizontal: spacing.lg, paddingTop: spacing.md }]}>
+        <AppInput
+          placeholder="Nova fonte de receita"
           value={newName}
           onChangeText={setNewName}
+          onSubmitEditing={handleAdd}
+          returnKeyType="done"
+          style={styles.input}
         />
-        <TouchableOpacity onPress={handleAdd} style={[styles.addBtn, { backgroundColor: colors.primary }]}>
-          <Text style={styles.addBtnText}>Adicionar</Text>
-        </TouchableOpacity>
+        <AppButton
+          testID="btn-add-source"
+          title="Adicionar"
+          onPress={handleAdd}
+          isLoading={loading}
+          disabled={!newName.trim()}
+          style={styles.addBtn}
+        />
       </View>
-      
+
       <FlatList
         data={sources}
         keyExtractor={s => s.id}
         renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: 40 }}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  addSection: { flexDirection: 'row', marginBottom: 24, alignItems: 'center' },
-  input: { flex: 1, borderWidth: 1, borderRadius: 8, padding: 12, marginRight: 12, fontSize: 16 },
-  addBtn: { paddingHorizontal: 16, paddingVertical: 14, borderRadius: 8 },
-  addBtnText: { color: '#fff', fontWeight: 'bold' },
-  sourceItem: { flexDirection: 'row', paddingVertical: 16, borderBottomWidth: 1, alignItems: 'center', justifyContent: 'space-between' },
-  sourceName: { fontSize: 16, fontWeight: '500' },
-  toggleBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }
+  container:  { flex: 1 },
+  addSection: { gap: 8, marginBottom: 8 },
+  input:      { marginBottom: 0 },
+  addBtn:     { alignSelf: 'flex-end' },
+  row: {
+    flexDirection: 'row',
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rowName:   { fontSize: 16, fontWeight: '500', flex: 1, marginRight: 12 },
+  toggleBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
 });

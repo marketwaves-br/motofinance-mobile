@@ -1,7 +1,7 @@
 # MotoFinance Mobile — Session Checkpoint
 
-> **Última atualização**: 24 de abril de 2026
-> **Status geral**: App funcionalmente completo. Paginação cursor-based, FlatList em Entries, useDashboardData hook, Error Boundary e testIDs adicionados hoje.
+> **Última atualização**: 24 de abril de 2026 (sessão 2)
+> **Status geral**: App funcionalmente completo. Todas as dívidas técnicas DT-3 a DT-5 resolvidas. Backup em nuvem adiado (requer Google Cloud Console setup). Sprint 3 pendente.
 
 ---
 
@@ -192,9 +192,9 @@ CREATE INDEX IF NOT EXISTS idx_financial_goals_period_type ON financial_goals(pe
 |---|---|---|
 | DT-1 | Entidades de domínio (`src/domain/entities/`) não usadas pelos repositórios | Baixa |
 | DT-2 | `schema.sql` pode divergir de `sqlite.ts` | Atualizar ao alterar schema |
-| DT-3 | SafeArea inconsistente entre telas | Baixa |
-| DT-4 | `manage-sources/categories` usam `TextInput` cru em vez de `AppInput` | Baixa |
-| DT-5 | `SortableChipGrid`: bug ao posicionar item como último da lista | Baixa |
+| ~~DT-3~~ | ~~SafeArea inconsistente entre telas~~ | ✅ Resolvido |
+| ~~DT-4~~ | ~~`manage-sources/categories` usam `TextInput` cru em vez de `AppInput`~~ | ✅ Resolvido |
+| ~~DT-5~~ | ~~`SortableChipGrid`: bug ao posicionar item como último da lista~~ | ✅ Resolvido |
 
 ---
 
@@ -213,10 +213,10 @@ CREATE INDEX IF NOT EXISTS idx_financial_goals_period_type ON financial_goals(pe
 - [x] testIDs nos elementos interativos principais
 
 ### Sprint 3 (features — confirmar com usuário antes de implementar)
+- [ ] Busca/filtro por texto em lançamentos — **próxima a implementar**
 - [ ] Lançamentos recorrentes — novo schema necessário
-- [ ] Backup em nuvem (Google Drive / iCloud) — decisão de produto
+- [ ] Backup em nuvem — Opção B (export/import arquivo .db via expo-sharing) aprovada pelo usuário; Opção A (Google Drive OAuth) requer Google Cloud Console setup
 - [ ] Notificações (meta atingida, lembrete diário) — permissões iOS/Android
-- [ ] Busca/filtro por texto em lançamentos
 
 ---
 
@@ -247,5 +247,5 @@ CREATE INDEX IF NOT EXISTS idx_financial_goals_period_type ON financial_goals(pe
 
 - **Branch ativa**: `develop`
 - **Último commit**: `b279429` — feat: validação Zod, formatters BRL, índices SQLite e testes
-- **Pendente**: commit das alterações de 24/04/2026 (paginação, FlatList, hooks, Error Boundary)
+- **Pendente**: commit das alterações das duas sessões de 24/04/2026 (paginação, FlatList, hooks, Error Boundary, DT-3/4/5)
 - **Remote**: `origin/develop` (após commitar, rodar `git push origin develop`)

@@ -266,6 +266,40 @@ export function SortableChipGrid({
       }
     }
 
+    // 2ª tentativa: solto após o último chip visualmente → posicionar como último
+    if (!targetId) {
+      let lastId: string | null = null;
+      let maxBottom = -Infinity;
+      let maxRight = -Infinity;
+      for (const [id, l] of Object.entries(itemLayouts.current)) {
+        if (id === srcId) continue;
+        const bottom = l.y + l.height;
+        if (bottom > maxBottom || (bottom === maxBottom && l.x + l.width > maxRight)) {
+          maxBottom = bottom;
+          maxRight = l.x + l.width;
+          lastId = id;
+        }
+      }
+      if (lastId) {
+        const ll = itemLayouts.current[lastId];
+        const pastBottom = relY > ll.y + ll.height;
+        const pastRight = relY >= ll.y && relY <= ll.y + ll.height && relX > ll.x + ll.width;
+        if (pastBottom || pastRight) {
+          const cur = itemsRef.current;
+          const srcIdx = cur.findIndex((i) => i.id === srcId);
+          const tgtIdx = cur.findIndex((i) => i.id === lastId);
+          if (srcIdx !== -1 && tgtIdx !== -1 && srcIdx !== tgtIdx) {
+            const newItems = [...cur];
+            const [removed] = newItems.splice(srcIdx, 1);
+            newItems.push(removed);
+            setItems(newItems);
+            onOrderChange(newItems);
+          }
+          return;
+        }
+      }
+    }
+
     // Fallback: chip com centro mais próximo
     if (!targetId) {
       let minDist = Infinity;
