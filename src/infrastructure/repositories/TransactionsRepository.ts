@@ -247,30 +247,43 @@ export class TransactionsRepository {
   static async getTransactionHistory(
     start?: Date,
     end?: Date,
-    opts?: { limit?: number; before?: string },
+    opts?: { limit?: number; before?: string; search?: string },
   ): Promise<PagedTransactionResult> {
-    const db     = await getDatabase();
-    const LIMIT  = opts?.limit ?? PAGE_SIZE_DEFAULT;
-    const before = opts?.before ?? null;
+    const db      = await getDatabase();
+    const LIMIT   = opts?.limit ?? PAGE_SIZE_DEFAULT;
+    const before  = opts?.before ?? null;
+    const search  = opts?.search?.trim() ?? null;
 
     const hasRangeFilter = start !== undefined && end !== undefined;
     const startISO = hasRangeFilter ? start!.toISOString() : null;
     const endISO   = hasRangeFilter ? end!.toISOString()   : null;
-    const hasCursor = before !== null;
+    const hasSearch = !!search;
+    const hasCursor = before !== null && !hasSearch; // cursor desabilitado durante busca
+    const searchPattern = hasSearch ? `%${search}%` : null;
 
     // Monta cláusula WHERE e parâmetros para cada branch do UNION ALL
-    const buildBranch = (dateCol: string): { where: string; params: (string | null)[] } => {
+    const buildBranch = (
+      dateCol: string,
+      noteCol: string,
+      labelCol: string,
+    ): { where: string; params: (string | null)[] } => {
       const conds: string[]           = [];
       const params: (string | null)[] = [];
       if (hasRangeFilter) { conds.push(`${dateCol} BETWEEN ? AND ?`); params.push(startISO, endISO); }
       if (hasCursor)      { conds.push(`${dateCol} < ?`);             params.push(before); }
+      if (hasSearch)      {
+        conds.push(`(${noteCol} LIKE ? OR ${labelCol} LIKE ?)`);
+        params.push(searchPattern, searchPattern);
+      }
       return { where: conds.length ? `WHERE ${conds.join(' AND ')}` : '', params };
     };
 
-    const inc = buildBranch('i.received_at');
-    const exp = buildBranch('e.spent_at');
+    const inc = buildBranch('i.received_at', 'i.notes', 's.name');
+    const exp = buildBranch('e.spent_at',    'e.notes', 'c.name');
 
-    // Busca LIMIT+1 para detectar hasMore sem query extra
+    // Busca LIMIT+1 para detectar hasMore (sem pesquisa); cap de 500 durante busca
+    const queryLimit = hasSearch ? 500 : LIMIT + 1;
+
     const rows = await db.getAllAsync<{
       id: string;
       type: string;
@@ -297,9 +310,9 @@ export class TransactionsRepository {
       ${exp.where}
       ORDER BY date DESC
       LIMIT ?
-    `, [...inc.params, ...exp.params, LIMIT + 1]);
+    `, [...inc.params, ...exp.params, queryLimit]);
 
-    const hasMore    = rows.length > LIMIT;
+    const hasMore    = !hasSearch && rows.length > LIMIT;
     if (hasMore) rows.pop();                                              // descarta sentinela
     const nextCursor = hasMore && rows.length > 0
       ? rows[rows.length - 1].date

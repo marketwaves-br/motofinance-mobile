@@ -148,4 +148,15 @@ export const initDatabase = async () => {
   }
 };
 
+/**
+ * Fecha a conexão ativa e reseta o singleton.
+ * Necessário antes de sobrescrever o arquivo .db no restore de backup.
+ */
+export const resetDatabase = async (): Promise<void> => {
+  if (_db) {
+    try { await _db.closeAsync(); } catch { /* ignora erros de fechamento */ }
+    _db = null;
+  }
+};
+
 export { getDatabase };

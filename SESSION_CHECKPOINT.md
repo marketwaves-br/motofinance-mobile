@@ -1,7 +1,7 @@
 # MotoFinance Mobile — Session Checkpoint
 
-> **Última atualização**: 24 de abril de 2026 (sessão 2)
-> **Status geral**: App funcionalmente completo. Todas as dívidas técnicas DT-3 a DT-5 resolvidas. Backup em nuvem adiado (requer Google Cloud Console setup). Sprint 3 pendente.
+> **Última atualização**: 26 de abril de 2026 (sessão 2)
+> **Status geral**: App funcionalmente completo. Busca por texto, backup/restore, swipe em lançamentos e configuração de tema implementados.
 
 ---
 
@@ -213,9 +213,11 @@ CREATE INDEX IF NOT EXISTS idx_financial_goals_period_type ON financial_goals(pe
 - [x] testIDs nos elementos interativos principais
 
 ### Sprint 3 (features — confirmar com usuário antes de implementar)
-- [ ] Busca/filtro por texto em lançamentos — **próxima a implementar**
-- [ ] Lançamentos recorrentes — novo schema necessário
-- [ ] Backup em nuvem — Opção B (export/import arquivo .db via expo-sharing) aprovada pelo usuário; Opção A (Google Drive OAuth) requer Google Cloud Console setup
+- [x] Busca/filtro por texto em lançamentos — debounce 300ms, filtra notes + label (fonte/categoria), desabilita paginação
+- [x] Backup/Restore — exportBackup (expo-sharing) + importBackup (expo-document-picker) com rollback automático; seção DADOS em Settings
+- [x] Swipe para editar/excluir em lançamentos — ReanimatedSwipeable, um item aberto por vez, long-press mantido como fallback
+- [x] Configuração de tema — Sistema/Claro/Escuro; Zustand + SQLite (app_settings.theme); carregado no setup antes da splash
+- [ ] Lançamentos recorrentes — novo schema necessário (adiado para o final)
 - [ ] Notificações (meta atingida, lembrete diário) — permissões iOS/Android
 
 ---
@@ -247,5 +249,5 @@ CREATE INDEX IF NOT EXISTS idx_financial_goals_period_type ON financial_goals(pe
 
 - **Branch ativa**: `develop`
 - **Último commit**: `b279429` — feat: validação Zod, formatters BRL, índices SQLite e testes
-- **Pendente**: commit das alterações das duas sessões de 24/04/2026 (paginação, FlatList, hooks, Error Boundary, DT-3/4/5)
+- **Pendente**: commit da sessão de 26/04/2026 (busca, backup, swipe, tema)
 - **Remote**: `origin/develop` (após commitar, rodar `git push origin develop`)

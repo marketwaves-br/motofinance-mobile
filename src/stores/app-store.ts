@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { AppSettingsRepository } from '@/infrastructure/repositories/AppSettingsRepository';
+import { AppSettingsRepository, type ThemePreference } from '@/infrastructure/repositories/AppSettingsRepository';
 import { UserProfileRepository } from '@/infrastructure/repositories/UserProfileRepository';
 
 interface AppState {
@@ -12,6 +12,11 @@ interface AppState {
   // Perfil do motorista
   userName: string | null;
   loadUserProfile: () => Promise<void>;
+
+  // Tema
+  themePreference: ThemePreference;
+  loadThemePreference: () => Promise<void>;
+  setThemePreference: (pref: ThemePreference) => Promise<void>;
 
   // Loading geral
   isLoading: boolean;
@@ -55,6 +60,27 @@ export const useAppStore = create<AppState>((set) => ({
       }
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
+    }
+  },
+
+  // Tema
+  themePreference: 'system',
+
+  loadThemePreference: async () => {
+    try {
+      const pref = await AppSettingsRepository.getTheme();
+      set({ themePreference: pref });
+    } catch (err) {
+      console.error('Erro ao carregar tema:', err);
+    }
+  },
+
+  setThemePreference: async (pref: ThemePreference) => {
+    set({ themePreference: pref });
+    try {
+      await AppSettingsRepository.setTheme(pref);
+    } catch (err) {
+      console.error('Erro ao salvar tema:', err);
     }
   },
 

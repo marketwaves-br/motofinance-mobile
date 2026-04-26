@@ -61,14 +61,16 @@ const eb = StyleSheet.create({
 export default function RootLayout() {
   const [dbIsReady, setDbIsReady] = useState(false);
   const { colors } = useTheme();
-  const loadOnboardingState = useAppStore((s) => s.loadOnboardingState);
-  const loadUserProfile = useAppStore((s) => s.loadUserProfile);
+  const loadOnboardingState   = useAppStore((s) => s.loadOnboardingState);
+  const loadUserProfile       = useAppStore((s) => s.loadUserProfile);
+  const loadThemePreference   = useAppStore((s) => s.loadThemePreference);
 
   useEffect(() => {
     async function setup() {
       try {
         await initDatabase();
         // Hidratar Zustand com dados persistidos no SQLite
+        await loadThemePreference();
         await loadOnboardingState();
         await loadUserProfile();
       } catch (e) {

@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useMemo } from 'react';
+import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,11 @@ import {
   Platform,
   ActivityIndicator,
   ListRenderItemInfo,
+  TextInput,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import type { SwipeableMethods } from 'react-native-gesture-handler';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, router } from 'expo-router';
@@ -21,6 +24,106 @@ import {
   startOfDay, endOfDay, dateKey, getThisMonday, getFirstOfMonth, formatDateBR,
 } from '@/lib/dates';
 import type { UnifiedTransaction, TransactionSection } from '@/types/transaction';
+
+// ─── SwipeableRow ─────────────────────────────────────────────────────────────
+
+type SwipeableRowProps = {
+  item:        UnifiedTransaction;
+  onEdit:      (item: UnifiedTransaction) => void;
+  onDelete:    (item: UnifiedTransaction) => void;
+  onLongPress: (item: UnifiedTransaction) => void;
+  openRef:     React.MutableRefObject<SwipeableMethods | null>;
+};
+
+function SwipeableRow({ item, onEdit, onDelete, onLongPress, openRef }: SwipeableRowProps) {
+  const { colors } = useTheme();
+  const swipeRef   = useRef<SwipeableMethods>(null);
+
+  const isIncome    = item.type === 'income';
+  const amountColor = isIncome ? colors.income : colors.expense;
+  const sign        = isIncome ? '+' : '-';
+
+  const handleOpen = () => {
+    if (openRef.current && openRef.current !== swipeRef.current) {
+      openRef.current.close();
+    }
+    openRef.current = swipeRef.current;
+  };
+
+  const renderRightActions = () => (
+    <View style={swipeStyles.actions}>
+      <TouchableOpacity
+        style={[swipeStyles.action, { backgroundColor: colors.primary }]}
+        onPress={() => { swipeRef.current?.close(); onEdit(item); }}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="pencil" size={18} color="#fff" />
+        <Text style={swipeStyles.actionText}>Editar</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[swipeStyles.action, { backgroundColor: colors.danger }]}
+        onPress={() => { swipeRef.current?.close(); onDelete(item); }}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="trash" size={18} color="#fff" />
+        <Text style={swipeStyles.actionText}>Excluir</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  return (
+    <ReanimatedSwipeable
+      ref={swipeRef}
+      renderRightActions={renderRightActions}
+      onSwipeableOpen={handleOpen}
+      rightThreshold={40}
+      friction={2}
+      overshootRight={false}
+    >
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onLongPress={() => { swipeRef.current?.close(); onLongPress(item); }}
+        delayLongPress={400}
+      >
+        <View style={[styles.transactionRow, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+          <View style={[styles.iconContainer, { backgroundColor: `${amountColor}18` }]}>
+            <Ionicons
+              name={isIncome ? 'arrow-up-circle' : 'arrow-down-circle'}
+              size={22}
+              color={amountColor}
+            />
+          </View>
+          <View style={styles.labelContainer}>
+            <Text style={[styles.transactionLabel, { color: colors.text }]} numberOfLines={1}>
+              {item.label}
+            </Text>
+            <Text style={[styles.transactionTime, { color: colors.muted }]}>
+              {new Date(item.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              {item.notes ? ` · ${item.notes}` : ''}
+            </Text>
+          </View>
+          <Text style={[styles.transactionAmount, { color: amountColor }]}>
+            {sign} {formatBRL(item.amountCents)}
+          </Text>
+          {item.color && (
+            <View style={[styles.colorDot, { backgroundColor: item.color }]} />
+          )}
+        </View>
+      </TouchableOpacity>
+    </ReanimatedSwipeable>
+  );
+}
+
+const swipeStyles = StyleSheet.create({
+  actions:    { flexDirection: 'row' },
+  action: {
+    width: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+});
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -124,6 +227,19 @@ export default function EntriesScreen() {
     () => new Set([currentMonthKey()])
   );
 
+  // ── Swipeable ref (fecha o item aberto quando outro é deslizado) ─────────────
+  const openSwipeableRef = useRef<SwipeableMethods | null>(null);
+
+  // ── Search ───────────────────────────────────────────────────────────────────
+  const [searchQuery,    setSearchQuery]    = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchInputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
   // ── Active preset ─────────────────────────────────────────────────────────────
   const activePreset = useMemo((): 'today' | 'week' | 'month' | null => {
     const tk = dateKey(new Date());
@@ -188,7 +304,7 @@ export default function EntriesScreen() {
       const result = await TransactionsRepository.getTransactionHistory(
         startDate,
         endOfDay(endDate),
-        { limit: PAGE_SIZE },
+        { limit: PAGE_SIZE, search: debouncedSearch || undefined },
       );
       setSections(result.sections);
       setHasMore(result.hasMore);
@@ -200,7 +316,7 @@ export default function EntriesScreen() {
     }
   };
 
-  useFocusEffect(useCallback(() => { fetchHistory(); }, [startDate, endDate]));
+  useFocusEffect(useCallback(() => { fetchHistory(); }, [startDate, endDate, debouncedSearch]));
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -210,7 +326,7 @@ export default function EntriesScreen() {
 
   // ── Carregar mais (próxima página) ────────────────────────────────────────────
   const loadMore = useCallback(async () => {
-    if (!hasMore || loadingMore || !nextCursor) return;
+    if (!hasMore || loadingMore || !nextCursor || debouncedSearch) return;
     setLoadingMore(true);
     try {
       const result = await TransactionsRepository.getTransactionHistory(
@@ -247,7 +363,22 @@ export default function EntriesScreen() {
   };
 
   // ── Transaction actions ───────────────────────────────────────────────────────
-  const confirmDelete = (item: UnifiedTransaction) => {
+  const goEdit = useCallback((item: UnifiedTransaction) => {
+    router.push({
+      pathname: item.type === 'income'
+        ? '/(modals)/add-income'
+        : '/(modals)/add-expense',
+      params: {
+        id:          item.id,
+        amountCents: String(item.amountCents),
+        refId:       item.refId,
+        dateISO:     item.date,
+        notes:       item.notes ?? '',
+      },
+    });
+  }, []);
+
+  const confirmDelete = useCallback((item: UnifiedTransaction) => {
     const typeLabel = item.type === 'income' ? 'receita' : 'despesa';
     Alert.alert(
       'Excluir lançamento?',
@@ -264,76 +395,33 @@ export default function EntriesScreen() {
         },
       ]
     );
-  };
+  }, [fetchHistory]);
 
-  const handleLongPress = (item: UnifiedTransaction) => {
+  const handleLongPress = useCallback((item: UnifiedTransaction) => {
     const typeLabel = item.type === 'income' ? 'Receita' : 'Despesa';
     Alert.alert(
       `${typeLabel} · ${formatBRL(item.amountCents)}`,
       item.label,
       [
-        {
-          text: 'Editar',
-          onPress: () =>
-            router.push({
-              pathname: item.type === 'income'
-                ? '/(modals)/add-income'
-                : '/(modals)/add-expense',
-              params: {
-                id: item.id,
-                amountCents: String(item.amountCents),
-                refId: item.refId,
-                dateISO: item.date,
-                notes: item.notes ?? '',
-              },
-            }),
-        },
+        { text: 'Editar',  onPress: () => goEdit(item) },
         { text: 'Excluir', style: 'destructive', onPress: () => confirmDelete(item) },
         { text: 'Cancelar', style: 'cancel' },
       ]
     );
-  };
+  }, [goEdit, confirmDelete]);
 
   // ── Render helpers ────────────────────────────────────────────────────────────
 
-  const renderTransaction = (item: UnifiedTransaction) => {
-    const isIncome    = item.type === 'income';
-    const amountColor = isIncome ? colors.income : colors.expense;
-    const sign        = isIncome ? '+' : '-';
-    return (
-      <TouchableOpacity
-        key={item.id}
-        activeOpacity={0.7}
-        onLongPress={() => handleLongPress(item)}
-        delayLongPress={400}
-      >
-        <View style={[styles.transactionRow, { borderBottomColor: colors.border }]}>
-          <View style={[styles.iconContainer, { backgroundColor: `${amountColor}18` }]}>
-            <Ionicons
-              name={isIncome ? 'arrow-up-circle' : 'arrow-down-circle'}
-              size={22}
-              color={amountColor}
-            />
-          </View>
-          <View style={styles.labelContainer}>
-            <Text style={[styles.transactionLabel, { color: colors.text }]} numberOfLines={1}>
-              {item.label}
-            </Text>
-            <Text style={[styles.transactionTime, { color: colors.muted }]}>
-              {new Date(item.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-              {item.notes ? ` · ${item.notes}` : ''}
-            </Text>
-          </View>
-          <Text style={[styles.transactionAmount, { color: amountColor }]}>
-            {sign} {formatBRL(item.amountCents)}
-          </Text>
-          {item.color && (
-            <View style={[styles.colorDot, { backgroundColor: item.color }]} />
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const renderTransaction = (item: UnifiedTransaction) => (
+    <SwipeableRow
+      key={item.id}
+      item={item}
+      onEdit={goEdit}
+      onDelete={confirmDelete}
+      onLongPress={handleLongPress}
+      openRef={openSwipeableRef}
+    />
+  );
 
   const renderDayHeader = (title: string, data: UnifiedTransaction[]) => {
     const dayIncome  = data.filter(t => t.type === 'income').reduce((s, t) => s + t.amountCents, 0);
@@ -447,6 +535,12 @@ export default function EntriesScreen() {
     f === 'income' ? colors.income : f === 'expense' ? colors.expense : colors.primary;
 
   const emptyLabel = () => {
+    if (debouncedSearch) {
+      return {
+        title: 'Nenhum resultado encontrado',
+        sub: `Nenhum lançamento corresponde a "${debouncedSearch}".`,
+      };
+    }
     if (filter !== 'all') {
       return {
         title: `Nenhuma ${filter === 'income' ? 'receita' : 'despesa'} encontrada`,
@@ -464,6 +558,33 @@ export default function EntriesScreen() {
   const ListHeader = (
     <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
       <Text style={[styles.headerTitle, { color: colors.text }]}>Lançamentos</Text>
+
+      {/* Search bar */}
+      <View style={[styles.searchBar, {
+        backgroundColor: colors.surface,
+        borderColor: debouncedSearch ? colors.primary : colors.border,
+        borderRadius: radius.md,
+        marginTop: 12,
+      }]}>
+        <Ionicons name="search-outline" size={16} color={debouncedSearch ? colors.primary : colors.muted} />
+        <TextInput
+          ref={searchInputRef}
+          style={[styles.searchInput, { color: colors.text }]}
+          placeholder="Buscar descrição ou nota..."
+          placeholderTextColor={colors.muted}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          returnKeyType="search"
+          clearButtonMode="never"
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={16} color={colors.muted} />
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Period pills */}
       <View style={styles.pillRow}>
@@ -553,7 +674,7 @@ export default function EntriesScreen() {
         <View style={styles.hintRow}>
           <Ionicons name="information-circle-outline" size={14} color="#E67E22" />
           <Text style={[styles.hintText, { color: colors.icon }]}>
-            Segure um item para editar ou excluir
+            Deslize um item para editar ou excluir
           </Text>
         </View>
       )}
@@ -572,10 +693,19 @@ export default function EntriesScreen() {
     </View>
   ) : null;
 
+  const totalResults = useMemo(() =>
+    sections.reduce((sum, s) => sum + s.data.length, 0),
+    [sections]
+  );
+
   const ListFooter = loadingMore ? (
     <View style={styles.footerLoader}>
       <ActivityIndicator size="small" color={colors.primary} />
     </View>
+  ) : debouncedSearch && sections.length > 0 ? (
+    <Text style={[styles.footerEnd, { color: colors.muted }]}>
+      {totalResults} {totalResults === 1 ? 'resultado' : 'resultados'} para "{debouncedSearch}"
+    </Text>
   ) : !hasMore && sections.length > 0 ? (
     <Text style={[styles.footerEnd, { color: colors.muted }]}>
       Todos os registros carregados
@@ -652,6 +782,16 @@ const styles = StyleSheet.create({
   container:   { flex: 1 },
   header:      { paddingTop: 56, paddingBottom: 12 },
   headerTitle: { fontSize: 28, fontWeight: 'bold' },
+
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    gap: 8,
+  },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
 
   pillRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   pill: {
