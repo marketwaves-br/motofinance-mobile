@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '@/infrastructure/db/sqlite';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { requestNotificationPermissions, scheduleReminder } from '@/lib/notifications';
 import { useTheme } from '@/theme';
 import { useAppStore } from '@/stores/app-store';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -63,7 +64,8 @@ export default function RootLayout() {
   const { colors } = useTheme();
   const loadOnboardingState   = useAppStore((s) => s.loadOnboardingState);
   const loadUserProfile       = useAppStore((s) => s.loadUserProfile);
-  const loadThemePreference   = useAppStore((s) => s.loadThemePreference);
+  const loadThemePreference      = useAppStore((s) => s.loadThemePreference);
+  const loadNotificationSettings = useAppStore((s) => s.loadNotificationSettings);
 
   useEffect(() => {
     async function setup() {
@@ -71,8 +73,18 @@ export default function RootLayout() {
         await initDatabase();
         // Hidratar Zustand com dados persistidos no SQLite
         await loadThemePreference();
+        await loadNotificationSettings();
         await loadOnboardingState();
         await loadUserProfile();
+
+        // Solicita permissão e reagenda lembrete se ativo
+        const granted = await requestNotificationPermissions();
+        if (granted) {
+          const store = useAppStore.getState();
+          if (store.notificationsEnabled) {
+            await scheduleReminder(store.reminderTime);
+          }
+        }
       } catch (e) {
         console.error("Database initialization failed:", e);
       } finally {

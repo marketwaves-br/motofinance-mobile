@@ -6,7 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Switch,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
@@ -22,8 +24,20 @@ export default function SettingsScreen() {
   const [exportingBackup,  setExportingBackup]  = useState(false);
   const [importingBackup,  setImportingBackup]  = useState(false);
 
-  const themePreference    = useAppStore((s) => s.themePreference);
-  const setThemePreference = useAppStore((s) => s.setThemePreference);
+  const themePreference        = useAppStore((s) => s.themePreference);
+  const setThemePreference     = useAppStore((s) => s.setThemePreference);
+  const notificationsEnabled   = useAppStore((s) => s.notificationsEnabled);
+  const reminderTime           = useAppStore((s) => s.reminderTime);
+  const setNotificationsEnabled = useAppStore((s) => s.setNotificationsEnabled);
+  const setReminderTime        = useAppStore((s) => s.setReminderTime);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const reminderDate = (() => {
+    const [h, m] = reminderTime.split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d;
+  })();
 
   const handleExportBackup = async () => {
     setExportingBackup(true);
@@ -193,6 +207,65 @@ export default function SettingsScreen() {
           })}
         </View>
       </View>
+
+      {/* ── Notificações ─────────────────────────────────────── */}
+      <View style={[styles.sectionHeader, { borderBottomColor: colors.border, marginTop: spacing.xl }]}>
+        <Text style={[styles.sectionLabel, { color: colors.muted }]}>NOTIFICAÇÕES</Text>
+      </View>
+
+      <View style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 16 }]}>
+        <View style={styles.menuLeft}>
+          <Ionicons name="notifications-outline" size={22} color={colors.primary} style={{ marginRight: 14 }} />
+          <View>
+            <Text style={[styles.menuText, { color: colors.text }]}>Lembrete Diário</Text>
+            <Text style={[styles.menuSubtext, { color: colors.muted }]}>
+              Lembrar de registrar lançamentos
+            </Text>
+          </View>
+        </View>
+        <Switch
+          value={notificationsEnabled}
+          onValueChange={setNotificationsEnabled}
+          trackColor={{ false: colors.border, true: `${colors.primary}80` }}
+          thumbColor={notificationsEnabled ? colors.primary : colors.muted}
+        />
+      </View>
+
+      {notificationsEnabled && (
+        <TouchableOpacity
+          style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 16 }]}
+          onPress={() => setShowTimePicker(true)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.menuLeft}>
+            <Ionicons name="time-outline" size={22} color={colors.primary} style={{ marginRight: 14 }} />
+            <View>
+              <Text style={[styles.menuText, { color: colors.text }]}>Horário do Lembrete</Text>
+              <Text style={[styles.menuSubtext, { color: colors.muted }]}>
+                Todo dia às {reminderTime}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </TouchableOpacity>
+      )}
+
+      {showTimePicker && (
+        <DateTimePicker
+          value={reminderDate}
+          mode="time"
+          is24Hour
+          display="default"
+          onChange={(_e, date) => {
+            setShowTimePicker(false);
+            if (date) {
+              const h = String(date.getHours()).padStart(2, '0');
+              const m = String(date.getMinutes()).padStart(2, '0');
+              setReminderTime(`${h}:${m}`);
+            }
+          }}
+        />
+      )}
 
       {/* ── Dados ────────────────────────────────────────────── */}
       <View style={[styles.sectionHeader, { borderBottomColor: colors.border, marginTop: spacing.xl }]}>

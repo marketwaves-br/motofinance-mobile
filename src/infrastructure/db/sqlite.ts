@@ -105,13 +105,18 @@ export const initDatabase = async () => {
       );
     `);
 
-    // Migration defensiva: adiciona sort_order se não existir (devices com app já instalado)
-    // SQLite retorna erro se a coluna já existe — capturamos silenciosamente
+    // Migrations defensivas: adiciona colunas que podem não existir em installs antigos
     try {
       await db.execAsync(`ALTER TABLE income_sources ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;`);
     } catch { /* coluna já existe */ }
     try {
       await db.execAsync(`ALTER TABLE expense_categories ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;`);
+    } catch { /* coluna já existe */ }
+    try {
+      await db.execAsync(`ALTER TABLE app_settings ADD COLUMN notifications_enabled INTEGER NOT NULL DEFAULT 1;`);
+    } catch { /* coluna já existe */ }
+    try {
+      await db.execAsync(`ALTER TABLE app_settings ADD COLUMN reminder_time TEXT NOT NULL DEFAULT '20:00';`);
     } catch { /* coluna já existe */ }
 
     // Índices de performance (idempotentes via IF NOT EXISTS).

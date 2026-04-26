@@ -21,6 +21,8 @@ import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { TransactionsRepository } from '@/infrastructure/repositories/TransactionsRepository';
 import { IncomeSourcesRepository } from '@/infrastructure/repositories/IncomeSourcesRepository';
+import { checkGoalCrossed } from '@/lib/notifications';
+import { getFirstOfMonth } from '@/lib/dates';
 import { incomeSchema, IncomeInput } from '@/lib/validation';
 import { applyBRLMask, centsToMaskedBRL, parseBRLToCents } from '@/lib/formatters/currency';
 
@@ -69,7 +71,15 @@ export default function AddIncomeModal() {
       if (isEditing) {
         await TransactionsRepository.updateIncome(params.id!, data.refId, data.amountCents, data.date, data.notes);
       } else {
+        // Captura totais mensais antes de adicionar para detectar cruzamento de meta
+        const start = getFirstOfMonth();
+        const prevReport = await TransactionsRepository.getReportData(start, new Date()).catch(() => null);
+
         await TransactionsRepository.addIncome(data.refId, data.amountCents, data.date, data.notes);
+
+        if (prevReport) {
+          checkGoalCrossed(prevReport.totalIncomeCents, prevReport.netCents);
+        }
       }
       router.back();
     } catch (error) {
