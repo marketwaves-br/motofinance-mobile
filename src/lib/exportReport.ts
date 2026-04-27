@@ -1,6 +1,6 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
+import { File, Paths } from 'expo-file-system';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,9 +79,10 @@ export const shareCSV = async (data: ExportData): Promise<void> => {
   // BOM UTF-8 (\uFEFF) garante compatibilidade com Excel BR ao abrir direto
   const csv = '\uFEFF' + generateCSV(data);
   const filename = `motofinance_${data.generatedAt.replace(/\//g, '-')}.csv`;
-  const fileUri = `${FileSystem.cacheDirectory}${filename}`;
-  await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
-  await Sharing.shareAsync(fileUri, {
+  const csvFile = new File(Paths.cache, filename);
+  if (csvFile.exists) csvFile.delete();
+  csvFile.write(csv);
+  await Sharing.shareAsync(csvFile.uri, {
     mimeType: 'text/csv',
     dialogTitle: 'Compartilhar relatório CSV',
     UTI: 'public.comma-separated-values-text',

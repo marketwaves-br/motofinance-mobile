@@ -1,35 +1,78 @@
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { GoalsRepository } from '@/infrastructure/repositories/GoalsRepository';
 import { TransactionsRepository } from '@/infrastructure/repositories/TransactionsRepository';
 import { getFirstOfMonth } from '@/lib/dates';
 
-// Exibe notificação mesmo com app em foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// ─── Import lazy ─────────────────────────────────────────────────────────────
+//
+// expo-notifications possui um side-effect de nível de módulo
+// (DevicePushTokenAutoRegistration) que lança exceção no Expo Go (SDK 53+).
+// Para não quebrar a cadeia de importações no startup, o import é feito de
+// forma dinâmica (lazy), dentro de cada função que precisa do pacote.
+// Em builds de produção/desenvolvimento o comportamento é idêntico.
+
+type ExpoNotifications = typeof import('expo-notifications');
+
+let _N: ExpoNotifications | null = null;
+let _handlerSet = false;
+
+async function getNotifications(): Promise<ExpoNotifications | null> {
+  if (_N) return _N;
+  try {
+    const mod = await import('expo-notifications');
+
+    // Em Expo Go (SDK 53+) o módulo carrega parcialmente: o side-effect de
+    // push token falha mas não lança — algumas APIs ficam undefined.
+    // Verifica se a API de agendamento local está disponível.
+    if (typeof (mod as any).scheduleNotificationAsync !== 'function') {
+      console.warn('[notifications] expo-notifications sem suporte a notificações locais');
+      return null;
+    }
+
+    if (!_handlerSet) {
+      _handlerSet = true;
+      // setNotificationHandler pode estar ausente em Expo Go
+      if (typeof (mod as any).setNotificationHandler === 'function') {
+        mod.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: false,
+            shouldShowBanner: true,
+            shouldShowList: true,
+          }),
+        });
+      }
+    }
+
+    _N = mod;
+    return _N;
+  } catch (err) {
+    console.warn('[notifications] expo-notifications indisponível:', err);
+    return null;
+  }
+}
+
+// ─── API pública ──────────────────────────────────────────────────────────────
 
 const REMINDER_IDENTIFIER = 'motofinance-daily-reminder';
 
 /** Solicita permissão ao usuário. Retorna true se concedida. */
 export async function requestNotificationPermissions(): Promise<boolean> {
+  const N = await getNotifications();
+  if (!N) return false;
+
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
+    await N.setNotificationChannelAsync('default', {
       name: 'MotoFinance',
-      importance: Notifications.AndroidImportance.DEFAULT,
+      importance: N.AndroidImportance.DEFAULT,
     });
   }
 
-  const { status: existing } = await Notifications.getPermissionsAsync();
+  const { status: existing } = await N.getPermissionsAsync();
   if (existing === 'granted') return true;
 
-  const { status } = await Notifications.requestPermissionsAsync();
+  const { status } = await N.requestPermissionsAsync();
   return status === 'granted';
 }
 
@@ -43,14 +86,17 @@ export async function scheduleReminder(time: string): Promise<void> {
   const [hour, minute] = time.split(':').map(Number);
   if (isNaN(hour) || isNaN(minute)) return;
 
-  await Notifications.scheduleNotificationAsync({
+  const N = await getNotifications();
+  if (!N) return;
+
+  await N.scheduleNotificationAsync({
     identifier: REMINDER_IDENTIFIER,
     content: {
       title: 'MotoFinance 💰',
       body: 'Não esqueça de registrar seus lançamentos de hoje!',
     },
     trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      type: N.SchedulableTriggerInputTypes.DAILY,
       hour,
       minute,
     },
@@ -60,7 +106,9 @@ export async function scheduleReminder(time: string): Promise<void> {
 /** Remove o lembrete diário agendado, se existir. */
 export async function cancelReminder(): Promise<void> {
   try {
-    await Notifications.cancelScheduledNotificationAsync(REMINDER_IDENTIFIER);
+    const N = await getNotifications();
+    if (!N) return;
+    await N.cancelScheduledNotificationAsync(REMINDER_IDENTIFIER);
   } catch {
     // Ignora se não existia agendamento
   }
@@ -95,8 +143,13 @@ export async function checkGoalCrossed(
       prevNetCents < goals.net &&
       report.netCents >= goals.net;
 
+    if (!notifyIncome && !notifyNet) return;
+
+    const N = await getNotifications();
+    if (!N) return;
+
     if (notifyIncome && notifyNet) {
-      await Notifications.scheduleNotificationAsync({
+      await N.scheduleNotificationAsync({
         content: {
           title: 'Metas atingidas! 🏆',
           body: 'Você bateu a meta de receita e de lucro líquido este mês!',
@@ -104,15 +157,15 @@ export async function checkGoalCrossed(
         trigger: null,
       });
     } else if (notifyIncome) {
-      await Notifications.scheduleNotificationAsync({
+      await N.scheduleNotificationAsync({
         content: {
           title: 'Meta de receita atingida! 🎯',
           body: 'Você atingiu sua meta de receita mensal. Bora mais!',
         },
         trigger: null,
       });
-    } else if (notifyNet) {
-      await Notifications.scheduleNotificationAsync({
+    } else {
+      await N.scheduleNotificationAsync({
         content: {
           title: 'Meta de lucro atingida! 🚀',
           body: 'Você atingiu sua meta de lucro líquido mensal. Excelente!',
