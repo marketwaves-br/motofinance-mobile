@@ -103,6 +103,22 @@ export const initDatabase = async () => {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS recurring_rules (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        ref_id TEXT NOT NULL,
+        amount_cents INTEGER NOT NULL,
+        frequency TEXT NOT NULL,
+        day_of_week INTEGER,
+        day_of_month INTEGER,
+        start_date TEXT NOT NULL,
+        notes TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        last_generated_date TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
     `);
 
     // Migrations defensivas: adiciona colunas que podem não existir em installs antigos
@@ -141,6 +157,10 @@ export const initDatabase = async () => {
       -- Metas ativas por período (GoalsRepository)
       CREATE INDEX IF NOT EXISTS idx_financial_goals_period_type
         ON financial_goals(period, goal_type, is_active);
+
+      -- Regras recorrentes ativas
+      CREATE INDEX IF NOT EXISTS idx_recurring_rules_active
+        ON recurring_rules(is_active);
     `);
 
     // Auto-seed data

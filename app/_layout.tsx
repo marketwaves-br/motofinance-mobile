@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '@/infrastructure/db/sqlite';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { requestNotificationPermissions, scheduleReminder } from '@/lib/notifications';
+import { generatePendingTransactions } from '@/lib/recurringGenerator';
 import { useTheme } from '@/theme';
 import { useAppStore } from '@/stores/app-store';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -77,6 +78,11 @@ export default function RootLayout() {
         await loadOnboardingState();
         await loadUserProfile();
 
+        // Gera lançamentos recorrentes pendentes (silent — não bloqueia o startup)
+        generatePendingTransactions().catch(err =>
+          console.error('[startup] Erro ao gerar recorrentes:', err)
+        );
+
         // Solicita permissão e reagenda lembrete se ativo
         const granted = await requestNotificationPermissions();
         if (granted) {
@@ -117,6 +123,7 @@ export default function RootLayout() {
         <Stack.Screen name="(modals)/manage-sources" options={{ presentation: 'modal', title: 'Fontes de Receitas', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
         <Stack.Screen name="(modals)/manage-categories" options={{ presentation: 'modal', title: 'Categorias de Despesa', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
         <Stack.Screen name="(modals)/manage-goals" options={{ presentation: 'modal', title: 'Metas Mensais', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
+        <Stack.Screen name="(modals)/manage-recurring" options={{ presentation: 'modal', title: 'Lançamentos Recorrentes', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
       </Stack>
       </AppErrorBoundary>
     </GestureHandlerRootView>

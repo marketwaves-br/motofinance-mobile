@@ -1,7 +1,7 @@
 # MotoFinance Mobile — Session Checkpoint
 
-> **Última atualização**: 26 de abril de 2026 (sessão 2)
-> **Status geral**: App funcionalmente completo. Busca por texto, backup/restore, swipe em lançamentos e configuração de tema implementados.
+> **Última atualização**: 27 de abril de 2026 (sessão 4)
+> **Status geral**: App funcionalmente completo. Sprint 3 encerrado. Todas as features implementadas: notificações, backup/restore, busca, swipe, tema e lançamentos recorrentes.
 
 ---
 
@@ -134,6 +134,62 @@ Test Suites: 5 passed  |  Tests: 74 passed
 
 ---
 
+## 4b. O que foi feito na sessão de 26/04/2026
+
+### Sessão 1 (commits 05add86)
+- **DT-3/4** — `manage-sources/categories`: TextInput → AppInput, SafeAreaView edges bottom, isLoading/disabled, testIDs, try/catch
+- **DT-5** — `SortableChipGrid`: detecção "drop após último chip" antes do fallback nearest-center
+
+### Sessão 2 (commit 89a5df9)
+- **Busca por texto** em lançamentos: `getTransactionHistory` + `opts.search`, debounce 300ms, cap 500 registros, footer com contagem
+- **Backup/Restore**: `src/lib/backup.ts` — exportBackup (expo-sharing) + importBackup (expo-document-picker) com backup de segurança e rollback; `resetDatabase()` em sqlite.ts
+- **Swipe editar/excluir**: `SwipeableRow` com `ReanimatedSwipeable`, `openSwipeableRef` global, botões Editar (primary) + Excluir (danger), 80px cada
+- **Tema manual**: `ThemePreference` type, `AppSettingsRepository.getTheme/setTheme`, store Zustand, `useTheme()` lê preferência, carregado no setup
+
+### Sessão 3 (commit c3c0bb6)
+- **Notificações**: `expo-notifications` v55
+  - `src/lib/notifications.ts`: `requestNotificationPermissions`, `scheduleReminder`, `cancelReminder`, `checkGoalCrossed`
+  - `app_settings` migration: `notifications_enabled` + `reminder_time`
+  - `AppSettingsRepository`: `getNotificationSettings`, `setNotificationsEnabled`, `setReminderTime`
+  - `app-store.ts`: estado + ações; reagenda ao mudar enabled/horário
+  - `_layout.tsx`: solicita permissão + reagenda no startup
+  - `add-income.tsx`: captura totais antes → detecta cruzamento de meta → dispara notificação
+  - `settings.tsx`: Switch lembrete + TimePicker horário (condicional)
+
+### Novos arquivos criados nesta sessão
+- `src/lib/backup.ts`
+- `src/lib/notifications.ts`
+
+### Pacotes instalados nesta sessão
+- `expo-document-picker` (restore de backup)
+- `expo-notifications` v55
+
+---
+
+### Sessão 4 (27/04/2026) — Lançamentos Recorrentes
+- **Schema SQL** (`sqlite.ts`): tabela `recurring_rules` + índice `idx_recurring_rules_active`
+- **`RecurringRulesRepository`** (`src/infrastructure/repositories/RecurringRulesRepository.ts`):
+  - Tipos: `RecurringFrequency`, `RecurringType`, `RecurringRule`, `RecurringRuleWithLabel`, `NewRecurringRule`
+  - Métodos: `getAllRules()` (JOIN com label), `getActiveRules()`, `addRule()`, `updateRule()`, `toggleActive()`, `deleteRule()`, `updateLastGeneratedDate()`
+- **`recurringGenerator`** (`src/lib/recurringGenerator.ts`):
+  - `getDueDates(rule, fromKey, toKey)` — função pura exportada; `Math.min(dom, lastDay)` para meses curtos
+  - `generatePendingTransactions()` — chamado no startup (não-bloqueante); `last_generated_date` avança regra a regra; erros isolados por try/catch
+- **`_layout.tsx`**: Stack.Screen para `(modals)/manage-recurring`; `generatePendingTransactions().catch(...)` no setup
+- **`app/(modals)/manage-recurring.tsx`**: CRUD completo
+  - Zod schema com `superRefine` para validação condicional (semanal/mensal)
+  - Lista: ícone, label, descrição de frequência, valor, editar + Pausar/Ativar + excluir
+  - Formulário: type pills, chips de fonte/categoria, valor, frequência pills, DOW buttons / day_of_month, data início, notas
+  - `frequencyLabel()`, `DOW_SHORT`, `DOW_LONG`
+  - Hard-delete com Alert (avisa que transações geradas são mantidas)
+- **`settings.tsx`**: link "Lançamentos Recorrentes" adicionado na seção GERENCIAR
+
+### Design decisions (recorrentes)
+- **Sem retroação**: `last_generated_date = null` → usa `start_date` como `fromKey`
+- **Transações independentes**: regras não referenciam transações por FK; excluir/pausar regra não afeta histórico
+- **Meses curtos**: dia 31 em fevereiro → dia 28/29 (Math.min)
+
+---
+
 ## 5. Decisões de Design Fechadas
 
 | Decisão | Detalhe |
@@ -175,14 +231,15 @@ CREATE INDEX IF NOT EXISTS idx_financial_goals_period_type ON financial_goals(pe
 | `onboarding/welcome.tsx` | ✅ OK | — |
 | `onboarding/profile.tsx` | ✅ Zod + RHF | `profileSchema` |
 | `(tabs)/dashboard.tsx` | ✅ Refatorado | Usa `useDashboardData`; testIDs adicionados |
-| `(tabs)/entries.tsx` | ✅ FlatList + paginação | loadMore, mergeSections, 3 view modes |
+| `(tabs)/entries.tsx` | ✅ FlatList + paginação + busca + swipe | loadMore, mergeSections, SwipeableRow, searchBar |
 | `(tabs)/reports.tsx` | ✅ OK | Exportação CSV/PDF; Evolução Diária decrescente |
-| `(tabs)/settings.tsx` | ✅ OK | Menu com links; metas em modal |
+| `(tabs)/settings.tsx` | ✅ OK | Aparência (tema), Notificações, Dados (backup), Gerenciar |
 | `(modals)/add-income.tsx` | ✅ Zod + RHF | `incomeSchema`; modo edição |
 | `(modals)/add-expense.tsx` | ✅ Zod + RHF | `expenseSchema`; modo edição |
-| `(modals)/manage-sources.tsx` | ✅ OK | CRUD com soft-delete |
-| `(modals)/manage-categories.tsx` | ✅ OK | CRUD com soft-delete |
+| `(modals)/manage-sources.tsx` | ✅ OK | CRUD com soft-delete; AppInput; SafeArea |
+| `(modals)/manage-categories.tsx` | ✅ OK | CRUD com soft-delete; AppInput; SafeArea |
 | `(modals)/manage-goals.tsx` | ✅ OK | Metas mensais |
+| `(modals)/manage-recurring.tsx` | ✅ Zod + RHF | Lista + formulário; type/freq/DOW/day_of_month |
 
 ---
 
@@ -217,8 +274,8 @@ CREATE INDEX IF NOT EXISTS idx_financial_goals_period_type ON financial_goals(pe
 - [x] Backup/Restore — exportBackup (expo-sharing) + importBackup (expo-document-picker) com rollback automático; seção DADOS em Settings
 - [x] Swipe para editar/excluir em lançamentos — ReanimatedSwipeable, um item aberto por vez, long-press mantido como fallback
 - [x] Configuração de tema — Sistema/Claro/Escuro; Zustand + SQLite (app_settings.theme); carregado no setup antes da splash
-- [ ] Lançamentos recorrentes — novo schema necessário (adiado para o final)
-- [ ] Notificações (meta atingida, lembrete diário) — permissões iOS/Android
+- [x] Notificações — lembrete diário (horário configurável, padrão 20h) + alerta de meta atingida (detecção before/after cruzamento); expo-notifications v55; Switch + TimePicker em Settings
+- [x] Lançamentos recorrentes — `recurring_rules` schema, gerador no startup, modal completo Zod+RHF
 
 ---
 
@@ -248,6 +305,6 @@ CREATE INDEX IF NOT EXISTS idx_financial_goals_period_type ON financial_goals(pe
 ## 11. Git
 
 - **Branch ativa**: `develop`
-- **Último commit**: `b279429` — feat: validação Zod, formatters BRL, índices SQLite e testes
-- **Pendente**: commit da sessão de 26/04/2026 (busca, backup, swipe, tema)
+- **Último commit**: `c3c0bb6` — feat: notificações
+- **Pendente de commit**: feat: lançamentos recorrentes (sessão 4)
 - **Remote**: `origin/develop` (após commitar, rodar `git push origin develop`)

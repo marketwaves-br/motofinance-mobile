@@ -171,6 +171,17 @@ export default function SettingsScreen() {
         </Link>
       </View>
 
+      <View style={styles.menuWrapper}>
+        <Link href="/(modals)/manage-recurring" asChild>
+          <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.menuLeft}>
+              <Ionicons name="repeat-outline" size={22} color={colors.primary} style={{ marginRight: 14 }} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Lançamentos Recorrentes</Text>
+            </View>
+          </TouchableOpacity>
+        </Link>
+      </View>
+
       {/* ── Aparência ────────────────────────────────────────── */}
       <View style={[styles.sectionHeader, { borderBottomColor: colors.border, marginTop: spacing.xl }]}>
         <Text style={[styles.sectionLabel, { color: colors.muted }]}>APARÊNCIA</Text>
