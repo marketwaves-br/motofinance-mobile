@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,7 +13,7 @@ import { profileSchema, ProfileInput } from '@/lib/validation';
 
 export default function ProfileScreen() {
   const { colors, spacing } = useTheme();
-  const { completeOnboarding } = useAppStore();
+  const { completeOnboarding, loadUserProfile } = useAppStore();
   const [isSaving, setIsSaving] = useState(false);
 
   const {
@@ -22,13 +23,14 @@ export default function ProfileScreen() {
   } = useForm<ProfileInput>({
     resolver: zodResolver(profileSchema),
     mode: 'onChange',
-    defaultValues: { fullName: '', activityType: '' },
+    defaultValues: { fullName: '' },
   });
 
   const onSubmit = async (data: ProfileInput) => {
     setIsSaving(true);
     try {
-      await UserProfileRepository.saveProfile(data.fullName, data.activityType ?? '');
+      await UserProfileRepository.saveProfile(data.fullName);
+      await loadUserProfile();
       await completeOnboarding();
       router.replace('/');
     } catch (error) {
@@ -44,18 +46,22 @@ export default function ProfileScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingTop: 80 }}>
-        <Text style={[styles.title, { color: colors.text }]}>Conte sobre você</Text>
-        <Text style={[styles.subtitle, { color: colors.muted, marginBottom: spacing.xl }]}>
-          Defina seu perfil básico para iniciarmos o MotoFinance de forma configurada.
-        </Text>
+      {/* Cabeçalho fixo — sempre visível, mesmo com teclado aberto */}
+      <View style={[styles.header, { paddingHorizontal: spacing.xl, borderBottomColor: colors.border }]}>
+        <Ionicons name="wallet-outline" size={28} color={colors.primary} />
+        <Text style={[styles.brandName, { color: colors.primary }]}>MotoFinance</Text>
+      </View>
 
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.xl }}
+        keyboardShouldPersistTaps="handled"
+      >
         <Controller
           control={control}
           name="fullName"
           render={({ field: { value, onChange } }) => (
             <AppInput
-              label="Como devemos te chamar?"
+              label="Informe seu nome ou apelido"
               placeholder="Ex: João, Motorista..."
               value={value}
               onChangeText={onChange}
@@ -64,21 +70,12 @@ export default function ProfileScreen() {
           )}
         />
 
-        <Controller
-          control={control}
-          name="activityType"
-          render={({ field: { value, onChange } }) => (
-            <AppInput
-              label="O que você faz predominantemente?"
-              placeholder="Ex: Uber, iFood, Motofrete"
-              value={value ?? ''}
-              onChangeText={onChange}
-              error={errors.activityType?.message}
-            />
-          )}
+        <AppInput
+          label="Moeda padrão"
+          placeholder="BRL"
+          value="BRL"
+          editable={false}
         />
-
-        <AppInput label="Moeda Padrão" placeholder="Ex: BRL" value="BRL" editable={false} />
 
         <View style={{ marginTop: spacing.xl }}>
           <AppButton
@@ -96,6 +93,17 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  title: { fontSize: 32, fontWeight: 'bold', marginBottom: 8, letterSpacing: -0.5 },
-  subtitle: { fontSize: 16, lineHeight: 24 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingTop: 64,
+    paddingBottom: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  brandName: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
 });

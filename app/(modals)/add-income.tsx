@@ -211,7 +211,7 @@ export default function AddIncomeModal() {
           render={({ field: { value, onChange } }) => (
             <AppInput
               label="Observação (opcional)"
-              placeholder="Ex: Surge duplo, chuva forte..."
+              placeholder="Ex: Corrida longa, entrega especial..."
               value={value ?? ''}
               onChangeText={onChange}
               error={errors.notes?.message}

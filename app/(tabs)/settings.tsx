@@ -9,11 +9,12 @@ import {
   Switch,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
+import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { seedTestData } from '@/infrastructure/db/seedTestData';
-import { getDatabase } from '@/infrastructure/db/sqlite';
+import { getDatabase, clearAllData } from '@/infrastructure/db/sqlite';
 import { exportBackup, importBackup } from '@/lib/backup';
 import { useAppStore } from '@/stores/app-store';
 import type { ThemePreference } from '@/infrastructure/repositories/AppSettingsRepository';
@@ -21,9 +22,11 @@ import type { ThemePreference } from '@/infrastructure/repositories/AppSettingsR
 export default function SettingsScreen() {
   const { colors, spacing } = useTheme();
   const [seeding,          setSeeding]          = useState(false);
+  const [clearing,         setClearing]         = useState(false);
   const [exportingBackup,  setExportingBackup]  = useState(false);
   const [importingBackup,  setImportingBackup]  = useState(false);
 
+  const resetAppState          = useAppStore((s) => s.resetAppState);
   const themePreference        = useAppStore((s) => s.themePreference);
   const setThemePreference     = useAppStore((s) => s.setThemePreference);
   const notificationsEnabled   = useAppStore((s) => s.notificationsEnabled);
@@ -82,6 +85,33 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleClearData = () => {
+    Alert.alert(
+      'Limpar Dados de Teste',
+      'Isso apagará TODOS os dados — transações, metas, recorrentes e perfil — e voltará ao onboarding.\n\nDeseja continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Limpar Tudo',
+          style: 'destructive',
+          onPress: async () => {
+            setClearing(true);
+            try {
+              await clearAllData();
+              resetAppState();
+              router.replace('/');
+            } catch (err) {
+              console.error('Erro ao limpar dados:', err);
+              Alert.alert('Erro', 'Não foi possível limpar os dados. Tente novamente.');
+            } finally {
+              setClearing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleSeedData = () => {
     Alert.alert(
       'Gerar Dados de Teste',
@@ -114,8 +144,10 @@ export default function SettingsScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}
     >
-      <Text style={[styles.headerTitle, { color: colors.text }]}>Ajustes</Text>
-      <Text style={[styles.subtitle, { color: colors.muted }]}>Configurações do app</Text>
+      <View style={{ marginTop: 20, marginBottom: 16 }}>
+        <ScreenTitle title="Ajustes" />
+        <Text style={[styles.subtitle, { color: colors.muted }]}>Configurações do app</Text>
+      </View>
 
       {/* ── Perfil ────────────────────────────────────────────── */}
       <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
@@ -358,6 +390,25 @@ export default function SettingsScreen() {
               </View>
             </TouchableOpacity>
           </View>
+
+          <View style={styles.menuWrapper}>
+            <TouchableOpacity
+              onPress={handleClearData}
+              disabled={clearing}
+              style={[styles.menuItem, {
+                backgroundColor: colors.surface,
+                borderColor: clearing ? colors.border : colors.expense,
+                opacity: clearing ? 0.6 : 1,
+              }]}
+            >
+              <View style={styles.menuLeft}>
+                <Ionicons name="trash-outline" size={22} color={colors.expense} style={{ marginRight: 14 }} />
+                <Text style={[styles.menuText, { color: colors.text }]}>
+                  {clearing ? 'Limpando...' : 'Limpar Dados de Teste'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         </>
       )}
     </ScrollView>
@@ -366,7 +417,6 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerTitle: { fontSize: 28, fontWeight: 'bold', marginTop: 56, marginBottom: 4 },
   subtitle: { fontSize: 14, marginBottom: 32 },
   sectionHeader: {
     borderBottomWidth: StyleSheet.hairlineWidth,

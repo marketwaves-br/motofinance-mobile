@@ -278,8 +278,7 @@ export default function ManageRecurringModal() {
               {watchType === 'income' ? 'Fonte de Receita' : 'Categoria de Despesa'}
             </Text>
             <Controller control={control} name="ref_id" render={({ field: { value, onChange } }) => (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }}>
-                <View style={styles.chipRow}>
+              <View style={[styles.chipRow, { marginBottom: 4 }]}>
                   {chips.map(c => {
                     const isSelected = value === c.id;
                     return (
@@ -295,8 +294,7 @@ export default function ManageRecurringModal() {
                       </TouchableOpacity>
                     );
                   })}
-                </View>
-              </ScrollView>
+              </View>
             )} />
             {errors.ref_id && <Text style={[styles.err, { color: colors.danger }]}>{errors.ref_id.message}</Text>}
 
@@ -471,7 +469,7 @@ const styles = StyleSheet.create({
     borderRadius: 8, borderWidth: 1,
   },
 
-  chipRow: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 4 },
   chip: {
     paddingHorizontal: 14, paddingVertical: 8,
     borderRadius: 20, borderWidth: 1,

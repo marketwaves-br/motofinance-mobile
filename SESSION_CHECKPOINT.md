@@ -1,7 +1,7 @@
 # MotoFinance Mobile — Session Checkpoint
 
-> **Última atualização**: 27 de abril de 2026 (sessão 4)
-> **Status geral**: App funcionalmente completo. Sprint 3 encerrado. Todas as features implementadas: notificações, backup/restore, busca, swipe, tema e lançamentos recorrentes.
+> **Última atualização**: 27 de abril de 2026 (sessão 5)
+> **Status geral**: App funcionalmente completo. Sprint 3 encerrado. Polimentos de UX/UI aplicados: identidade visual, padronização de layout, campo activityType removido, bugs corrigidos.
 
 ---
 
@@ -302,9 +302,50 @@ CREATE INDEX IF NOT EXISTS idx_financial_goals_period_type ON financial_goals(pe
 
 ---
 
-## 11. Git
+---
+
+## 11. O que foi feito na sessão 5 (27/04/2026) — Polimentos UX/UI
+
+### Bugs corrigidos
+- **Nome não aparecia após onboarding**: `profile.tsx` não chamava `loadUserProfile()` após salvar — o Zustand ficava com `userName: null` e o dashboard exibia "Motorista Parceiro". Corrigido com `await loadUserProfile()` antes de `completeOnboarding()`.
+
+### Campo `activityType` removido
+- Removido de: `profile.schema.ts`, `profile.schema.test.ts`, `UserProfile.ts`, `UserProfileRepository.ts`, `onboarding/profile.tsx`, `manage-profile.tsx`
+- Coluna `activity_type` mantida no SQLite (sem migração necessária); nova assinatura: `saveProfile(fullName: string)`
+
+### Ferramenta de dev — Limpar Dados de Teste
+- `sqlite.ts`: `clearAllData()` — apaga incomes, expenses, goals, recurring_rules, user_profile, app_settings e re-executa seed de defaults
+- `app-store.ts`: `resetAppState()` — zera `hasCompletedOnboarding` e `userName` no Zustand
+- `settings.tsx` `__DEV__`: botão "Limpar Dados de Teste" (vermelho) que limpa banco + reseta store + navega para onboarding
+
+### Identidade visual — `ScreenTitle`
+- Novo componente `src/components/ui/ScreenTitle.tsx`: ícone `wallet-outline` (placeholder) + título em bold
+- Aplicado nas 4 abas: **Painel**, **Lançamentos**, **Relatórios**, **Ajustes**
+- Ícone definitivo: trocar `wallet-outline` em `ScreenTitle.tsx` quando pronto
+
+### Tela de onboarding/profile
+- Cabeçalho de marca (ícone + "MotoFinance") movido para fora do ScrollView — sempre visível com teclado aberto
+- Texto introdutório verbose removido
+- Campo "Moeda padrão" restaurado (prevendo versão multilíngue)
+- Label simplificado: "Informe seu nome ou apelido"
+
+### Padronização de espaçamento das abas
+- Referência: dashboard usa `padding: 24` + `header.marginTop: 20` = **44px** do topo até o título
+- Reports: `paddingTop: 56 → 44`
+- Entries: `paddingTop: 56 → 44`, `paddingBottom: 12 → 16`, `paddingTop: 8 → 0` no FlatList contentContainerStyle, `paddingHorizontal` duplicado removido do header View
+
+### Outros polimentos
+- `add-income.tsx`: placeholder de Observação alterado de "Surge duplo, chuva forte..." para "Corrida longa, entrega especial..."
+- `manage-recurring.tsx`: chips de fonte/categoria: `ScrollView horizontal` → `View` com `flexWrap: 'wrap'` (padrão das demais telas)
+- `entries.tsx`: botão limpar busca (`close-circle`) ampliado de `size={16}` para `size={22}`
+
+---
+
+## 12. Git
 
 - **Branch ativa**: `develop`
-- **Último commit**: `c3c0bb6` — feat: notificações
-- **Pendente de commit**: feat: lançamentos recorrentes (sessão 4)
+- **Commits desta sessão**:
+  - `4681a2b` — feat: lançamentos recorrentes (sessão 4)
+  - `de57c29` — fix: compatibilidade SDK 54 (lazy import notifications, nova API expo-file-system)
+- **Pendente de commit**: polimentos UX/UI da sessão 5 (ver seção 11)
 - **Remote**: `origin/develop` (após commitar, rodar `git push origin develop`)

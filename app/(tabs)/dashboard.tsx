@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useTheme } from '@/theme';
+import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppButton } from '@/components/ui/AppButton';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,6 +36,7 @@ export default function DashboardScreen() {
       }
     >
       <View style={styles.header}>
+        <ScreenTitle title="Painel" />
         <Text style={[styles.greeting, { color: colors.muted }]}>
           Olá, <Text style={{ color: colors.text, fontWeight: 'bold' }}>{userName || 'Motorista Parceiro'}.</Text>
         </Text>

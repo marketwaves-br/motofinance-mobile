@@ -29,6 +29,9 @@ interface AppState {
   // Loading geral
   isLoading: boolean;
   setLoading: (val: boolean) => void;
+
+  // Dev utilities
+  resetAppState: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -136,4 +139,11 @@ export const useAppStore = create<AppState>((set) => ({
   // Loading geral
   isLoading: false,
   setLoading: (val) => set({ isLoading: val }),
+
+  // Dev utilities
+  resetAppState: () => set({
+    hasCompletedOnboarding: false,
+    isOnboardingLoaded: true,
+    userName: null,
+  }),
 }));

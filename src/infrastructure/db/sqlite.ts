@@ -184,4 +184,21 @@ export const resetDatabase = async (): Promise<void> => {
   }
 };
 
+/**
+ * Apaga todos os dados do usuário e restaura apenas os defaults de seed.
+ * Uso exclusivo em __DEV__ para testes.
+ */
+export const clearAllData = async (): Promise<void> => {
+  const db = await getDatabase();
+  await db.execAsync(`
+    DELETE FROM incomes;
+    DELETE FROM expenses;
+    DELETE FROM financial_goals;
+    DELETE FROM recurring_rules;
+    DELETE FROM user_profile;
+    DELETE FROM app_settings;
+  `);
+  await runSeed(db);
+};
+
 export { getDatabase };

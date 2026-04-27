@@ -16,6 +16,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import type { SwipeableMethods } from 'react-native-gesture-handler';
 import { useTheme } from '@/theme';
+import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, router } from 'expo-router';
 import { TransactionsRepository } from '@/infrastructure/repositories/TransactionsRepository';
@@ -556,8 +557,8 @@ export default function EntriesScreen() {
   // ── Sub-componentes para ListHeaderComponent / Empty / Footer ─────────────────
 
   const ListHeader = (
-    <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
-      <Text style={[styles.headerTitle, { color: colors.text }]}>Lançamentos</Text>
+    <View style={styles.header}>
+      <ScreenTitle title="Lançamentos" />
 
       {/* Search bar */}
       <View style={[styles.searchBar, {
@@ -581,7 +582,7 @@ export default function EntriesScreen() {
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close-circle" size={16} color={colors.muted} />
+            <Ionicons name="close-circle" size={22} color={colors.muted} />
           </TouchableOpacity>
         )}
       </View>
@@ -761,7 +762,7 @@ export default function EntriesScreen() {
         ListEmptyComponent={ListEmpty}
         ListFooterComponent={ListFooter}
         contentContainerStyle={[
-          { paddingHorizontal: spacing.lg, paddingBottom: 100, paddingTop: 8 },
+          { paddingHorizontal: spacing.lg, paddingBottom: 100, paddingTop: 0 },
           !hasData && !isLoading && styles.emptyListContent,
         ]}
         refreshControl={
@@ -780,8 +781,7 @@ export default function EntriesScreen() {
 
 const styles = StyleSheet.create({
   container:   { flex: 1 },
-  header:      { paddingTop: 56, paddingBottom: 12 },
-  headerTitle: { fontSize: 28, fontWeight: 'bold' },
+  header:      { paddingTop: 44, paddingBottom: 16 },
 
   searchBar: {
     flexDirection: 'row',

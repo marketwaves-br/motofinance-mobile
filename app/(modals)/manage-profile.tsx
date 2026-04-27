@@ -25,15 +25,11 @@ export default function ManageProfileModal() {
   };
   
   const [fullName, setFullName] = useState('');
-  const [activityType, setActivityType] = useState('Moto de Aplicativo');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     UserProfileRepository.getProfile().then(profile => {
-      if (profile) {
-        setFullName(profile.fullName);
-        setActivityType(profile.activityType);
-      }
+      if (profile) setFullName(profile.fullName);
       setLoading(false);
     });
   }, []);
@@ -44,7 +40,7 @@ export default function ManageProfileModal() {
       return;
     }
     try {
-      await UserProfileRepository.saveProfile(fullName.trim(), activityType.trim() || 'Moto de Aplicativo');
+      await UserProfileRepository.saveProfile(fullName.trim());
       await loadUserProfile(); // Atualiza a store global para refletir na Home imediatamente
       Alert.alert('Sucesso', 'Seus dados foram atualizados.', [
         { text: 'OK', onPress: () => router.back() }
@@ -79,14 +75,6 @@ export default function ManageProfileModal() {
               onFocus={handleInputFocus}
             />
             
-            <AppInput
-              label="Qual é a sua atividade principal?"
-              placeholder="Ex: Moto de Aplicativo, Entregador..."
-              value={activityType}
-              onChangeText={setActivityType}
-              onFocus={handleInputFocus}
-            />
-
             <AppButton
               title="Salvar Alterações"
               size="lg"

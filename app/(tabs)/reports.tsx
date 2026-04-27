@@ -16,6 +16,7 @@ import {
   startOfDay, endOfDay, dateKey, getThisMonday, getFirstOfMonth, formatDateBR,
 } from '@/lib/dates';
 import { useTheme } from '@/theme';
+import { ScreenTitle } from '@/components/ui/ScreenTitle';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { TransactionsRepository } from '@/infrastructure/repositories/TransactionsRepository';
@@ -302,7 +303,7 @@ export default function ReportsScreen() {
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
         <View style={styles.headerRow}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Relatórios</Text>
+          <ScreenTitle title="Relatórios" />
           <TouchableOpacity
             id="export-report-btn"
             onPress={handleExport}
@@ -938,9 +939,8 @@ export default function ReportsScreen() {
 
 const styles = StyleSheet.create({
   container:   { flex: 1 },
-  header:      { paddingTop: 56, paddingBottom: 16 },
+  header:      { paddingTop: 44, paddingBottom: 16 },
   headerRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { fontSize: 28, fontWeight: 'bold' },
   exportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
