@@ -20,6 +20,10 @@ export interface DashboardData {
   monthlyIncome: number;
   monthlyNet: number;
   monthComparison: MonthComparison | null;
+  /** Meta diária calculada (cents). Null se não houver meta mensal de receita. */
+  dailyTarget: number | null;
+  /** Dias restantes no mês (incluindo hoje). */
+  remainingDays: number;
 }
 
 const MONTHS_SHORT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -35,6 +39,8 @@ export function useDashboardData() {
     monthlyIncome:   0,
     monthlyNet:      0,
     monthComparison: null,
+    dailyTarget:     null,
+    remainingDays:   1,
   });
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,12 +72,23 @@ export function useDashboardData() {
         monthComparison = { pct, prevMonthName: MONTHS_SHORT[prevIdx], improved: pct >= 0 };
       }
 
+      // ── Meta diária ────────────────────────────────────────────
+      const daysInMonth   = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+      const remaining     = daysInMonth - today.getDate() + 1; // inclui hoje
+      let dailyTarget: number | null = null;
+      if (goals.income !== null && goals.income > 0) {
+        const leftToGoal = Math.max(0, goals.income - monthData.totalIncomeCents);
+        dailyTarget = remaining > 0 ? Math.ceil(leftToGoal / remaining) : 0;
+      }
+
       setData({
         summary,
         goals,
         monthlyIncome:   monthData.totalIncomeCents,
         monthlyNet:      monthData.netCents,
         monthComparison,
+        dailyTarget,
+        remainingDays:   remaining,
       });
     } catch (error) {
       console.error('Erro ao carregar dados do dashboard:', error);

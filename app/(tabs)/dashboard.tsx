@@ -15,7 +15,7 @@ export default function DashboardScreen() {
   const { userName } = useAppStore();
   const { data, refreshing, fetch, refresh } = useDashboardData();
 
-  const { summary, goals, monthlyIncome, monthlyNet, monthComparison } = data;
+  const { summary, goals, monthlyIncome, monthlyNet, monthComparison, dailyTarget, remainingDays } = data;
 
   useFocusEffect(useCallback(() => { fetch(); }, [fetch]));
 
@@ -36,7 +36,7 @@ export default function DashboardScreen() {
       }
     >
       <View style={styles.header}>
-        <ScreenTitle title="Painel" />
+        <ScreenTitle title="MotoFinance" />
         <Text style={[styles.greeting, { color: colors.muted }]}>
           Olá, <Text style={{ color: colors.text, fontWeight: 'bold' }}>{userName || 'Motorista Parceiro'}.</Text>
         </Text>
@@ -119,6 +119,40 @@ export default function DashboardScreen() {
         );
       })()}
 
+      {/* ── Meta Diária ───────────────────────────────────────── */}
+      {dailyTarget !== null && (() => {
+        const todayIncome  = summary.incomes;
+        const pct          = dailyTarget === 0 ? 100 : Math.min(100, Math.round((todayIncome / dailyTarget) * 100));
+        const goalMet      = pct >= 100;
+        const color        = goalMet ? colors.income : pct >= 70 ? '#E67E22' : colors.primary;
+        const remaining    = Math.max(0, dailyTarget - todayIncome);
+        return (
+          <AppCard style={styles.dailyCard}>
+            <View style={styles.goalCardHeader}>
+              <Ionicons name="today-outline" size={15} color={colors.primary} />
+              <Text style={[styles.goalCardTitle, { color: colors.text }]}>Meta de Hoje</Text>
+              <Text style={[styles.dailyDays, { color: colors.muted }]}>
+                {remainingDays} {remainingDays === 1 ? 'dia restante' : 'dias restantes'}
+              </Text>
+            </View>
+            <View style={styles.goalRowTop}>
+              <Text style={[styles.goalLabel, { color: colors.muted }]}>Receita hoje</Text>
+              <Text style={[styles.goalPct, { color }]}>{pct}%</Text>
+            </View>
+            <View style={[styles.goalBarTrack, { backgroundColor: colors.border }]}>
+              <View style={[styles.goalBarFill, { width: `${pct}%`, backgroundColor: color }]} />
+            </View>
+            <View style={styles.goalRowBottom}>
+              <Text style={[styles.goalAmount, { color: colors.text }]}>{formatBRL(todayIncome)}</Text>
+              <Text style={[styles.goalRemaining, { color: goalMet ? colors.income : colors.muted }]}>
+                {goalMet ? 'meta do dia atingida!' : `faltam ${formatBRL(remaining)}`}
+              </Text>
+              <Text style={[styles.goalAmount, { color: colors.muted }]}>{formatBRL(dailyTarget)}</Text>
+            </View>
+          </AppCard>
+        );
+      })()}
+
       {/* ── Botões de lançamento ──────────────────────────────── */}
       <View style={[styles.actionRow, { marginTop: spacing.lg }]}>
         <AppButton
@@ -158,6 +192,8 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 12 },
   actionBtn: { flex: 1, paddingVertical: 14, justifyContent: 'center' },
   goalCard:       { marginTop: 16, marginBottom: 0 },
+  dailyCard:      { marginTop: 12, marginBottom: 0 },
+  dailyDays:      { fontSize: 11, marginLeft: 'auto' },
   goalCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12 },
   goalCardTitle:  { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   goalRow:        { marginBottom: 10 },

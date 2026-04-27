@@ -22,16 +22,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { TransactionsRepository } from '@/infrastructure/repositories/TransactionsRepository';
 import { IncomeSourcesRepository } from '@/infrastructure/repositories/IncomeSourcesRepository';
 import { checkGoalCrossed } from '@/lib/notifications';
-import { getFirstOfMonth } from '@/lib/dates';
+import { getFirstOfMonth, formatDateBR } from '@/lib/dates';
 import { incomeSchema, IncomeInput } from '@/lib/validation';
 import { applyBRLMask, centsToMaskedBRL, parseBRLToCents } from '@/lib/formatters/currency';
-
-const formatDateBR = (date: Date): string => {
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
-};
 
 export default function AddIncomeModal() {
   const { colors, spacing, radius } = useTheme();
@@ -78,7 +71,7 @@ export default function AddIncomeModal() {
         await TransactionsRepository.addIncome(data.refId, data.amountCents, data.date, data.notes);
 
         if (prevReport) {
-          checkGoalCrossed(prevReport.totalIncomeCents, prevReport.netCents);
+          await checkGoalCrossed(prevReport.totalIncomeCents, prevReport.netCents);
         }
       }
       router.back();
@@ -113,7 +106,7 @@ export default function AddIncomeModal() {
       >
         <Text style={[styles.title, { color: colors.text }]}>{isEditing ? 'Editar Receita' : 'Nova Receita'}</Text>
 
-        <Text style={[styles.label, { color: colors.text }]}>De qual App de rua?</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Fonte de receita</Text>
 
         <View style={[styles.hintRow, { marginBottom: spacing.sm }]}>
           <Ionicons name="hand-left-outline" size={14} color="#E67E22" style={{ marginRight: 5 }} />

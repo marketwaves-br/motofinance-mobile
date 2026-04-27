@@ -20,6 +20,7 @@ import {
 } from '@/infrastructure/repositories/RecurringRulesRepository';
 import { TransactionsRepository } from '@/infrastructure/repositories/TransactionsRepository';
 import { applyBRLMask, centsToMaskedBRL, parseBRLToCents, formatBRL } from '@/lib/formatters/currency';
+import { getDueDates } from '@/lib/recurringGenerator';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -35,6 +36,25 @@ function frequencyLabel(rule: RecurringRuleWithLabel): string {
 
 function formatDateBR(date: Date): string {
   return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
+}
+
+function addDays(date: Date, n: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function toDateKey(date: Date): string {
+  return date.toLocaleDateString('en-CA');
+}
+
+function nextOccurrence(rule: RecurringRuleWithLabel): string | null {
+  const tomorrow = addDays(new Date(), 1);
+  const horizon  = addDays(tomorrow, 35);
+  const dates    = getDueDates(rule, toDateKey(tomorrow), toDateKey(horizon));
+  if (!dates.length) return null;
+  const [y, m, d] = dates[0].split('-').map(Number);
+  return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}`;
 }
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -220,6 +240,14 @@ export default function ManageRecurringModal() {
           <Text style={[styles.ruleFreq, { color: colors.muted }]}>
             {frequencyLabel(item)} · {formatBRL(item.amount_cents)}
           </Text>
+          {isActive && (() => {
+            const next = nextOccurrence(item);
+            return next ? (
+              <Text style={[styles.ruleNext, { color: colors.primary }]}>
+                Próxima: {next}
+              </Text>
+            ) : null;
+          })()}
         </View>
         <TouchableOpacity onPress={() => openEdit(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginRight: 8 }}>
           <Ionicons name="pencil-outline" size={18} color={colors.muted} />
@@ -498,6 +526,7 @@ const styles = StyleSheet.create({
   ruleInfo: { flex: 1, marginRight: 8 },
   ruleLabel: { fontSize: 15, fontWeight: '600' },
   ruleFreq:  { fontSize: 12, marginTop: 2 },
+  ruleNext:  { fontSize: 11, marginTop: 3, fontWeight: '600' },
   toggleBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 },
 
   empty:      { alignItems: 'center', paddingTop: 60, gap: 10, paddingHorizontal: 32 },

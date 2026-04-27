@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   ListRenderItemInfo,
   TextInput,
+  Animated,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -230,6 +231,31 @@ export default function EntriesScreen() {
 
   // ── Swipeable ref (fecha o item aberto quando outro é deslizado) ─────────────
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
+
+  // ── FAB ───────────────────────────────────────────────────────────────────────
+  const [fabOpen, setFabOpen] = useState(false);
+  const fabAnim = useRef(new Animated.Value(0)).current;
+
+  const toggleFab = () => {
+    const opening = !fabOpen;
+    setFabOpen(opening);
+    Animated.spring(fabAnim, {
+      toValue: opening ? 1 : 0,
+      useNativeDriver: true,
+      friction: 7,
+      tension: 80,
+    }).start();
+  };
+
+  const closeFab = () => {
+    setFabOpen(false);
+    Animated.spring(fabAnim, { toValue: 0, useNativeDriver: true, friction: 7 }).start();
+  };
+
+  const fabRotation  = fabAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] });
+  const subOpacity   = fabAnim;
+  const subScale     = fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1] });
+  const subTranslate = fabAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] });
 
   // ── Search ───────────────────────────────────────────────────────────────────
   const [searchQuery,    setSearchQuery]    = useState('');
@@ -675,7 +701,7 @@ export default function EntriesScreen() {
         <View style={styles.hintRow}>
           <Ionicons name="information-circle-outline" size={14} color="#E67E22" />
           <Text style={[styles.hintText, { color: colors.icon }]}>
-            Deslize um item para editar ou excluir
+            Deslize o item para a esquerda para editar ou excluir
           </Text>
         </View>
       )}
@@ -770,9 +796,69 @@ export default function EntriesScreen() {
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
-        // Evita re-renders desnecessários ao expandir/colapsar meses
         extraData={expandedMonths}
       />
+
+      {/* Backdrop — fecha o FAB ao tocar fora */}
+      {fabOpen && (
+        <TouchableOpacity
+          style={[StyleSheet.absoluteFillObject, { zIndex: 10 }]}
+          onPress={closeFab}
+          activeOpacity={1}
+        />
+      )}
+
+      {/* FAB expansível */}
+      <View style={styles.fabContainer} pointerEvents="box-none">
+        {/* Sub-botão Receita */}
+        <Animated.View
+          style={[styles.fabSubRow, {
+            opacity: subOpacity,
+            transform: [{ scale: subScale }, { translateY: subTranslate }],
+          }]}
+          pointerEvents={fabOpen ? 'auto' : 'none'}
+        >
+          <Text style={[styles.fabSubLabel, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}>
+            Receita
+          </Text>
+          <TouchableOpacity
+            style={[styles.fabSub, { backgroundColor: colors.income }]}
+            onPress={() => { closeFab(); router.push('/(modals)/add-income'); }}
+          >
+            <Ionicons name="add" size={22} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Sub-botão Despesa */}
+        <Animated.View
+          style={[styles.fabSubRow, {
+            opacity: subOpacity,
+            transform: [{ scale: subScale }, { translateY: subTranslate }],
+          }]}
+          pointerEvents={fabOpen ? 'auto' : 'none'}
+        >
+          <Text style={[styles.fabSubLabel, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}>
+            Despesa
+          </Text>
+          <TouchableOpacity
+            style={[styles.fabSub, { backgroundColor: colors.expense }]}
+            onPress={() => { closeFab(); router.push('/(modals)/add-expense'); }}
+          >
+            <Ionicons name="remove" size={22} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Botão principal */}
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: colors.primary }]}
+          onPress={toggleFab}
+          activeOpacity={0.85}
+        >
+          <Animated.View style={{ transform: [{ rotate: fabRotation }] }}>
+            <Ionicons name="add" size={30} color="#fff" />
+          </Animated.View>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -894,5 +980,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 99,
+  },
+
+  fabContainer: {
+    position: 'absolute',
+    bottom: 28,
+    right: 20,
+    alignItems: 'flex-end',
+    gap: 12,
+    zIndex: 20,
+  },
+  fabSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  fabSubLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  fabSub: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  fab: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
   },
 });
