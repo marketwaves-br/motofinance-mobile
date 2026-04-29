@@ -91,25 +91,44 @@ export default function ManageRecurringModal() {
   const [categories,  setCategories]  = useState<{ id: string; name: string }[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const scrollRef      = useRef<ScrollView>(null);
-  const [formCardHeight, setFormCardHeight] = useState(0);
+  const scrollRef    = useRef<ScrollView>(null);
+  const valorFieldY  = useRef(0);  // Y do wrapper do campo Valor dentro do formCard
+  const scrollViewH  = useRef(0);  // altura visível do ScrollView (atualiza via onLayout)
+  const diaMesFieldY = useRef(0);  // Y do campo Dia do mês dentro do formCard
 
-  // Rola até o fim do card do formulário (não do conteúdo todo,
-  // pois as regras listadas abaixo fariam scrollToEnd ir longe demais).
-  const scrollToFormBottom = () => {
-    if (formCardHeight === 0) return;
-    // spacing.md = paddingTop do wrapper ListHeader
-    const targetY = spacing.md + formCardHeight + 24;
-    scrollRef.current?.scrollTo({ y: targetY, animated: true });
-  };
+  // ListHeader tem paddingTop: spacing.md (16) e formCard tem padding: 16
+  // Portanto, o conteúdo do formCard começa a 32px do topo do scroll
+  const FORM_OFFSET = spacing.md + 16; // 32
 
-  const handleFieldFocus = () => {
-    setTimeout(scrollToFormBottom, 50);
+  // ── Campo Valor: borda inferior do textbox fica acima do teclado ──────────────
+  // Abordagem: usa scrollViewH (altura real visível do ScrollView após o teclado
+  // abrir) para calcular o targetY sem depender de coordenadas de tela.
+  //   scrollTo(targetY) = faz com que o conteúdo em targetY fique no TOPO da viewport
+  //   Logo: targetY = fieldBottom - scrollViewH + 24  (24px de margem acima do teclado)
+  const handleValorFocus = () => {
+    const exec = () => {
+      if (scrollViewH.current === 0) return;
+      // AppInput: marginTop(12) + label(~22) + TextInput(~52) ≈ 86px; +10 de margem
+      const fieldBottom = FORM_OFFSET + valorFieldY.current + 96;
+      const targetY = Math.max(0, fieldBottom - scrollViewH.current + 24);
+      scrollRef.current?.scrollTo({ y: targetY, animated: true });
+    };
+    // Caso teclado já aberto (vindo de outro campo)
+    setTimeout(exec, 50);
+    // Caso teclado ainda fechado: aguarda evento e 50ms extras para o onLayout atualizar
     const sub = Keyboard.addListener('keyboardDidShow', () => {
-      scrollToFormBottom();
+      setTimeout(exec, 50);
       sub.remove();
     });
-    // Cleanup defensivo — caso o teclado nunca abra (campo perdeu foco antes)
+    setTimeout(() => sub.remove(), 1500);
+  };
+
+  // ── Campo Dia do mês: rola para que o label fique logo abaixo do título ─────
+  const handleDiaMesFocus = () => {
+    const targetY = Math.max(0, FORM_OFFSET + diaMesFieldY.current - 8);
+    const scroll  = () => scrollRef.current?.scrollTo({ y: targetY, animated: true });
+    setTimeout(scroll, 50);
+    const sub = Keyboard.addListener('keyboardDidShow', () => { scroll(); sub.remove(); });
     setTimeout(() => sub.remove(), 1500);
   };
 
@@ -295,10 +314,7 @@ export default function ManageRecurringModal() {
       {!showForm ? (
         <AppButton title="+ Nova Regra" onPress={openAdd} style={{ marginBottom: spacing.md }} />
       ) : (
-          <View
-            onLayout={(e) => setFormCardHeight(e.nativeEvent.layout.height)}
-            style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md }]}
-          >
+          <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md }]}>
             <Text style={[styles.formTitle, { color: colors.text }]}>
               {editingId ? 'Editar Regra' : 'Nova Regra'}
             </Text>
@@ -350,18 +366,20 @@ export default function ManageRecurringModal() {
             {errors.ref_id && <Text style={[styles.err, { color: colors.danger }]}>{errors.ref_id.message}</Text>}
 
             {/* Valor */}
-            <Controller control={control} name="amount_cents" render={({ field: { value, onChange } }) => (
-              <AppInput
-                label="Valor"
-                placeholder="R$ 0,00"
-                keyboardType="numeric"
-                value={value ? centsToMaskedBRL(value) : ''}
-                onChangeText={t => { const m = applyBRLMask(t); onChange(m ? parseBRLToCents(m) : undefined); }}
-                onFocus={handleFieldFocus}
-                error={errors.amount_cents?.message}
-                style={{ marginTop: 12 }}
-              />
-            )} />
+            <View onLayout={(e) => { valorFieldY.current = e.nativeEvent.layout.y; }}>
+              <Controller control={control} name="amount_cents" render={({ field: { value, onChange } }) => (
+                <AppInput
+                  label="Valor"
+                  placeholder="R$ 0,00"
+                  keyboardType="numeric"
+                  value={value ? centsToMaskedBRL(value) : ''}
+                  onChangeText={t => { const m = applyBRLMask(t); onChange(m ? parseBRLToCents(m) : undefined); }}
+                  onFocus={handleValorFocus}
+                  error={errors.amount_cents?.message}
+                  style={{ marginTop: 12 }}
+                />
+              )} />
+            </View>
 
             {/* Frequência */}
             <Text style={[styles.fieldLabel, { color: colors.text, marginTop: 4 }]}>Frequência</Text>
@@ -404,21 +422,23 @@ export default function ManageRecurringModal() {
 
             {/* Dia do mês (monthly) */}
             {watchFrequency === 'monthly' && (
-              <Controller control={control} name="day_of_month" render={({ field: { value, onChange } }) => (
-                <AppInput
-                  label="Dia do mês (1–31)"
-                  placeholder="Ex: 5"
-                  keyboardType="numeric"
-                  value={value != null ? String(value) : ''}
-                  onChangeText={t => {
-                    const n = parseInt(t, 10);
-                    onChange(!isNaN(n) && n >= 1 && n <= 31 ? n : null);
-                  }}
-                  onFocus={handleFieldFocus}
-                  error={errors.day_of_month?.message}
-                  style={{ marginTop: 12 }}
-                />
-              )} />
+              <View onLayout={(e) => { diaMesFieldY.current = e.nativeEvent.layout.y; }}>
+                <Controller control={control} name="day_of_month" render={({ field: { value, onChange } }) => (
+                  <AppInput
+                    label="Dia do mês (1–31)"
+                    placeholder="Ex: 5"
+                    keyboardType="numeric"
+                    value={value != null ? String(value) : ''}
+                    onChangeText={t => {
+                      const n = parseInt(t, 10);
+                      onChange(!isNaN(n) && n >= 1 && n <= 31 ? n : null);
+                    }}
+                    onFocus={handleDiaMesFocus}
+                    error={errors.day_of_month?.message}
+                    style={{ marginTop: 12 }}
+                  />
+                )} />
+              </View>
             )}
 
             {/* Data de início */}
@@ -451,7 +471,6 @@ export default function ManageRecurringModal() {
                 placeholder="Ex: Aluguel do box"
                 value={value ?? ''}
                 onChangeText={onChange}
-                onFocus={handleFieldFocus}
                 multiline
                 numberOfLines={1}
                 style={{ marginTop: 12, textAlignVertical: 'top' } as any}
@@ -491,6 +510,7 @@ export default function ManageRecurringModal() {
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingBottom: 60 }}
         keyboardShouldPersistTaps="handled"
+        onLayout={(e) => { scrollViewH.current = e.nativeEvent.layout.height; }}
       >
         {ListHeader}
 

@@ -300,16 +300,16 @@ export default function ReportsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
-        <View style={styles.headerRow}>
-          <ScreenTitle title="Relatórios" />
+      {/* ── Barra de título fixa ─────────────────────────────────────────────── */}
+      <ScreenTitle
+        title="Relatórios"
+        rightContent={
           <TouchableOpacity
             id="export-report-btn"
             onPress={handleExport}
             disabled={isExporting || !report}
             style={[styles.exportBtn, {
-              backgroundColor: colors.surface,
+              backgroundColor: colors.background,
               borderColor: colors.border,
               opacity: (isExporting || !report) ? 0.45 : 1,
             }]}
@@ -323,8 +323,11 @@ export default function ReportsScreen() {
               {isExporting ? 'Exportando…' : 'Exportar'}
             </Text>
           </TouchableOpacity>
-        </View>
+        }
+      />
 
+      {/* ── Filtros fixos (abaixo do título) ─────────────────────────────────── */}
+      <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
         {/* Quick presets */}
         <View style={styles.pillRow}>
           {(['today', 'week', 'month'] as const).map(p => {
@@ -939,8 +942,7 @@ export default function ReportsScreen() {
 
 const styles = StyleSheet.create({
   container:   { flex: 1 },
-  header:      { paddingTop: 44, paddingBottom: 16 },
-  headerRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header:      { paddingTop: 10, paddingBottom: 12 },
   exportBtn: {
     flexDirection: 'row',
     alignItems: 'center',

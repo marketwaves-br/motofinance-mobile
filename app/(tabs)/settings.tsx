@@ -140,14 +140,12 @@ export default function SettingsScreen() {
 
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}
-    >
-      <View style={{ marginTop: 20, marginBottom: 16 }}>
-        <ScreenTitle title="Ajustes" />
-        <Text style={[styles.subtitle, { color: colors.muted }]}>Configurações do app</Text>
-      </View>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenTitle title="Ajustes" />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}
+      >
 
       {/* ── Perfil ────────────────────────────────────────────── */}
       <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
@@ -411,7 +409,8 @@ export default function SettingsScreen() {
           </View>
         </>
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

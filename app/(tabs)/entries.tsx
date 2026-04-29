@@ -584,7 +584,6 @@ export default function EntriesScreen() {
 
   const ListHeader = (
     <View style={styles.header}>
-      <ScreenTitle title="Lançamentos" />
 
       {/* Search bar */}
       <View style={[styles.searchBar, {
@@ -743,6 +742,8 @@ export default function EntriesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
+      <ScreenTitle title="Lançamentos" />
+
       {/* Loading overlay */}
       {isLoading && (
         <View style={styles.loadingOverlay} pointerEvents="box-only">
@@ -867,7 +868,7 @@ export default function EntriesScreen() {
 
 const styles = StyleSheet.create({
   container:   { flex: 1 },
-  header:      { paddingTop: 44, paddingBottom: 16 },
+  header:      { paddingTop: 12, paddingBottom: 16 },
 
   searchBar: {
     flexDirection: 'row',

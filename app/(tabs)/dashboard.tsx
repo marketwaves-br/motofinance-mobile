@@ -27,16 +27,17 @@ export default function DashboardScreen() {
   })();
 
   return (
-    <ScrollView
-      testID="dashboard-scroll"
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />
-      }
-    >
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenTitle title="MotoFinance" />
+      <ScrollView
+        testID="dashboard-scroll"
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />
+        }
+      >
       <View style={styles.header}>
-        <ScreenTitle title="MotoFinance" />
         <Text style={[styles.greeting, { color: colors.muted }]}>
           Olá, <Text style={{ color: colors.text, fontWeight: 'bold' }}>{userName || 'Motorista Parceiro'}.</Text>
         </Text>
@@ -173,13 +174,14 @@ export default function DashboardScreen() {
           onPress={() => router.push('/(modals)/add-expense')}
         />
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { marginTop: 20, marginBottom: 16 },
+  header: { marginBottom: 16 },
   greeting: { fontSize: 18, fontWeight: '400' },
   dateLabel: { fontSize: 13, fontWeight: '300', fontStyle: 'italic', marginTop: 4, letterSpacing: 0.1 },
   balanceCard: { marginBottom: 12, alignItems: 'center', paddingVertical: 20 },
