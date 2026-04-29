@@ -204,6 +204,7 @@ export default function AddExpenseModal() {
               placeholder="Ex: Manutenção preventiva, pneu furado..."
               value={value ?? ''}
               onChangeText={onChange}
+              onFocus={handleAmountFocus}
               error={errors.notes?.message}
               multiline
               numberOfLines={2}

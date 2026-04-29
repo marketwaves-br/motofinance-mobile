@@ -207,6 +207,7 @@ export default function AddIncomeModal() {
               placeholder="Ex: Corrida longa, entrega especial..."
               value={value ?? ''}
               onChangeText={onChange}
+              onFocus={handleAmountFocus}
               error={errors.notes?.message}
               multiline
               numberOfLines={2}

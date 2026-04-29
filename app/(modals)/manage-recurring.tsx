@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, Alert, TouchableOpacity,
-  ScrollView, Platform, KeyboardAvoidingView,
+  View, Text, StyleSheet, Alert, TouchableOpacity,
+  ScrollView, Platform, KeyboardAvoidingView, Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -91,6 +90,28 @@ export default function ManageRecurringModal() {
   const [sources,     setSources]     = useState<{ id: string; name: string }[]>([]);
   const [categories,  setCategories]  = useState<{ id: string; name: string }[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const scrollRef      = useRef<ScrollView>(null);
+  const [formCardHeight, setFormCardHeight] = useState(0);
+
+  // Rola até o fim do card do formulário (não do conteúdo todo,
+  // pois as regras listadas abaixo fariam scrollToEnd ir longe demais).
+  const scrollToFormBottom = () => {
+    if (formCardHeight === 0) return;
+    // spacing.md = paddingTop do wrapper ListHeader
+    const targetY = spacing.md + formCardHeight + 24;
+    scrollRef.current?.scrollTo({ y: targetY, animated: true });
+  };
+
+  const handleFieldFocus = () => {
+    setTimeout(scrollToFormBottom, 50);
+    const sub = Keyboard.addListener('keyboardDidShow', () => {
+      scrollToFormBottom();
+      sub.remove();
+    });
+    // Cleanup defensivo — caso o teclado nunca abra (campo perdeu foco antes)
+    setTimeout(() => sub.remove(), 1500);
+  };
 
   const {
     control, handleSubmit, watch, reset, setValue,
@@ -274,8 +295,10 @@ export default function ManageRecurringModal() {
       {!showForm ? (
         <AppButton title="+ Nova Regra" onPress={openAdd} style={{ marginBottom: spacing.md }} />
       ) : (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md }]}>
+          <View
+            onLayout={(e) => setFormCardHeight(e.nativeEvent.layout.height)}
+            style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md }]}
+          >
             <Text style={[styles.formTitle, { color: colors.text }]}>
               {editingId ? 'Editar Regra' : 'Nova Regra'}
             </Text>
@@ -334,6 +357,7 @@ export default function ManageRecurringModal() {
                 keyboardType="numeric"
                 value={value ? centsToMaskedBRL(value) : ''}
                 onChangeText={t => { const m = applyBRLMask(t); onChange(m ? parseBRLToCents(m) : undefined); }}
+                onFocus={handleFieldFocus}
                 error={errors.amount_cents?.message}
                 style={{ marginTop: 12 }}
               />
@@ -390,6 +414,7 @@ export default function ManageRecurringModal() {
                     const n = parseInt(t, 10);
                     onChange(!isNaN(n) && n >= 1 && n <= 31 ? n : null);
                   }}
+                  onFocus={handleFieldFocus}
                   error={errors.day_of_month?.message}
                   style={{ marginTop: 12 }}
                 />
@@ -423,11 +448,12 @@ export default function ManageRecurringModal() {
             <Controller control={control} name="notes" render={({ field: { value, onChange } }) => (
               <AppInput
                 label="Observação (opcional)"
-                placeholder="Ex: Aluguel do box, parcela moto..."
+                placeholder="Ex: Aluguel do box"
                 value={value ?? ''}
                 onChangeText={onChange}
+                onFocus={handleFieldFocus}
                 multiline
-                numberOfLines={2}
+                numberOfLines={1}
                 style={{ marginTop: 12, textAlignVertical: 'top' } as any}
               />
             )} />
@@ -444,7 +470,6 @@ export default function ManageRecurringModal() {
               />
             </View>
           </View>
-        </KeyboardAvoidingView>
       )}
 
       {rules.length > 0 && (
@@ -456,26 +481,36 @@ export default function ManageRecurringModal() {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
-      <FlatList
-        data={rules}
-        keyExtractor={r => r.id}
-        renderItem={renderRule}
-        ListHeaderComponent={ListHeader}
-        ListEmptyComponent={
-          !showForm ? (
-            <View style={styles.empty}>
-              <Ionicons name="repeat-outline" size={56} color={colors.muted} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>Nenhuma regra configurada</Text>
-              <Text style={[styles.emptySub, { color: colors.muted }]}>
-                Adicione despesas ou receitas que se repetem automaticamente.
-              </Text>
-            </View>
-          ) : null
-        }
-        contentContainerStyle={{ paddingBottom: 48 }}
-      />
-    </SafeAreaView>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 80}
+    >
+      <ScrollView
+        ref={scrollRef}
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingBottom: 60 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {ListHeader}
+
+        {rules.length === 0 && !showForm && (
+          <View style={styles.empty}>
+            <Ionicons name="repeat-outline" size={56} color={colors.muted} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>Nenhuma regra configurada</Text>
+            <Text style={[styles.emptySub, { color: colors.muted }]}>
+              Adicione despesas ou receitas que se repetem automaticamente.
+            </Text>
+          </View>
+        )}
+
+        {rules.map(rule => (
+          <View key={rule.id}>
+            {renderRule({ item: rule })}
+          </View>
+        ))}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
