@@ -2,7 +2,7 @@ import { useEffect, useState, Component, ReactNode } from 'react';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '@/infrastructure/db/sqlite';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
 import { requestNotificationPermissions, scheduleReminder } from '@/lib/notifications';
 import { generatePendingTransactions } from '@/lib/recurringGenerator';
 import { useTheme } from '@/theme';
@@ -77,25 +77,27 @@ export default function RootLayout() {
         await loadNotificationSettings();
         await loadOnboardingState();
         await loadUserProfile();
-
-        // Gera lançamentos recorrentes pendentes (silent — não bloqueia o startup)
-        generatePendingTransactions().catch(err =>
-          console.error('[startup] Erro ao gerar recorrentes:', err)
-        );
-
-        // Solicita permissão e reagenda lembrete se ativo
-        const granted = await requestNotificationPermissions();
-        if (granted) {
-          const store = useAppStore.getState();
-          if (store.notificationsEnabled) {
-            await scheduleReminder(store.reminderTime);
-          }
-        }
       } catch (e) {
         console.error("Database initialization failed:", e);
       } finally {
-        setDbIsReady(true);
+        // Esconde a splash do Expo imediatamente → nossa ImageBackground assume
         await SplashScreen.hideAsync();
+
+        // Tarefas não-críticas em paralelo (não bloqueiam a splash)
+        generatePendingTransactions().catch(err =>
+          console.error('[startup] Erro ao gerar recorrentes:', err)
+        );
+        requestNotificationPermissions().then(granted => {
+          if (granted) {
+            const store = useAppStore.getState();
+            if (store.notificationsEnabled) scheduleReminder(store.reminderTime);
+          }
+        }).catch(err => console.error('[startup] Erro notificações:', err));
+
+        // TODO: remover delay — apenas para avaliar a splash screen
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        setDbIsReady(true);
       }
     }
     setup();
@@ -104,7 +106,11 @@ export default function RootLayout() {
   if (!dbIsReady) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={{ flex: 1, backgroundColor: colors.background }} />
+        <ImageBackground
+          source={require('../assets/brand/splash-screen.png')}
+          style={{ flex: 1 }}
+          resizeMode="cover"
+        />
       </GestureHandlerRootView>
     );
   }
