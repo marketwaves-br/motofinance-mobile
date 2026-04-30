@@ -24,7 +24,7 @@ export const Colors = {
     secondary:        '#1677FF',
     danger:           '#EF4444',
     expense:          '#F43F5E',
-    income:           '#10B981',
+    income:           '#1677FF',
     muted:            '#6B7280',
   },
   dark: {
@@ -41,7 +41,7 @@ export const Colors = {
     secondary:        '#1677FF',
     danger:           '#EF4444',
     expense:          '#F43F5E',
-    income:           '#10B981',
+    income:           '#1677FF',
     muted:            '#64748B',
   },
 };
