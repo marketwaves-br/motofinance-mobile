@@ -15,6 +15,15 @@ export const formatBRL = (cents: number): string => {
 };
 
 /**
+ * Formata centavos como número BRL sem o símbolo "R$".
+ * Ex.: 4550 → "45,50" | 1000000 → "10.000,00"
+ * Útil quando o símbolo é exibido separadamente.
+ */
+export const formatBRLNumber = (cents: number): string => {
+  return (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+/**
  * Formata centavos para a máscara usada nos inputs (sem NBSP do Intl).
  * Ex.: 4550 → "R$ 45,50"; 0 → "R$ 0,00"
  */

@@ -7,7 +7,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, router } from 'expo-router';
 import { useAppStore } from '@/stores/app-store';
-import { formatBRL } from '@/lib/formatters/currency';
+import { formatBRL, formatBRLNumber } from '@/lib/formatters/currency';
 import { useDashboardData } from '@/hooks/useDashboardData';
 
 export default function DashboardScreen() {
@@ -32,7 +32,7 @@ export default function DashboardScreen() {
       <ScrollView
         testID="dashboard-scroll"
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: spacing.lg, paddingTop: 12, paddingBottom: 100 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />
         }
@@ -47,12 +47,12 @@ export default function DashboardScreen() {
       </View>
 
       <AppCard style={styles.balanceCard}>
-        <Text style={[styles.cardTitle, { color: colors.muted }]}>Lucro Líquido</Text>
+        <Text style={[styles.cardTitle, { color: colors.muted }]}>Lucro Líquido (R$)</Text>
         <Text
           testID="dashboard-net"
           style={[styles.cardAmount, { color: summary.net >= 0 ? colors.income : colors.expense }]}
         >
-          {formatBRL(summary.net)}
+          {formatBRLNumber(summary.net)}
         </Text>
         {monthComparison && (
           <Text style={[styles.comparisonLine, { color: monthComparison.improved ? colors.income : colors.expense }]}>
@@ -63,17 +63,21 @@ export default function DashboardScreen() {
 
       <View style={styles.row}>
         <AppCard style={[styles.halfCard, { borderColor: colors.income, borderWidth: 1 }]}>
-          <Ionicons name="arrow-up-circle-outline" size={24} color={colors.income} style={{ marginBottom: 8 }} />
-          <Text style={[styles.cardTitle, { color: colors.muted }]}>Receitas</Text>
-          <Text testID="dashboard-income" style={[styles.cardValue, { color: colors.income }]}>
-            {formatBRL(summary.incomes)}
+          <View style={styles.halfCardHeader}>
+            <Ionicons name="arrow-up-circle" size={15} color={colors.income} />
+            <Text style={[styles.halfCardLabel, { color: colors.muted }]}>Receitas (R$)</Text>
+          </View>
+          <Text testID="dashboard-income" style={[styles.cardValue, { color: colors.income }]} numberOfLines={1}>
+            {formatBRLNumber(summary.incomes)}
           </Text>
         </AppCard>
         <AppCard style={[styles.halfCard, { borderColor: colors.expense, borderWidth: 1 }]}>
-          <Ionicons name="arrow-down-circle-outline" size={24} color={colors.expense} style={{ marginBottom: 8 }} />
-          <Text style={[styles.cardTitle, { color: colors.muted }]}>Despesas</Text>
-          <Text testID="dashboard-expense" style={[styles.cardValue, { color: colors.expense }]}>
-            {formatBRL(summary.expenses)}
+          <View style={styles.halfCardHeader}>
+            <Ionicons name="arrow-down-circle" size={15} color={colors.expense} />
+            <Text style={[styles.halfCardLabel, { color: colors.muted }]}>Despesas (R$)</Text>
+          </View>
+          <Text testID="dashboard-expense" style={[styles.cardValue, { color: colors.expense }]} numberOfLines={1}>
+            {formatBRLNumber(summary.expenses)}
           </Text>
         </AppCard>
       </View>
@@ -155,7 +159,7 @@ export default function DashboardScreen() {
       })()}
 
       {/* ── Botões de lançamento ──────────────────────────────── */}
-      <View style={[styles.actionRow, { marginTop: spacing.lg }]}>
+      <View style={[styles.actionRow, { marginTop: 8 }]}>
         <AppButton
           testID="btn-add-income"
           title="Nova Receita"
@@ -184,17 +188,19 @@ const styles = StyleSheet.create({
   header: { marginBottom: 16 },
   greeting: { fontSize: 18, fontWeight: '400' },
   dateLabel: { fontSize: 13, fontWeight: '300', fontStyle: 'italic', marginTop: 4, letterSpacing: 0.1 },
-  balanceCard: { marginBottom: 12, alignItems: 'center', paddingVertical: 20 },
+  balanceCard: { marginBottom: 8, alignItems: 'center', paddingVertical: 8 },
   cardTitle: { fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
   cardAmount: { fontSize: 34, fontWeight: 'bold' },
-  cardValue: { fontSize: 20, fontWeight: 'bold', marginTop: 2 },
+  cardValue: { fontSize: 16, fontWeight: 'bold', marginTop: 2 },
   row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 0 },
-  halfCard: { width: '48%', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8 },
+  halfCard:       { width: '48%', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12 },
+  halfCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  halfCardLabel:  { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8 },
   comparisonLine: { fontSize: 12, fontWeight: '600', marginTop: 8 },
   actionRow: { flexDirection: 'row', gap: 12 },
-  actionBtn: { flex: 1, paddingVertical: 14, justifyContent: 'center' },
-  goalCard:       { marginTop: 16, marginBottom: 0 },
-  dailyCard:      { marginTop: 12, marginBottom: 0 },
+  actionBtn: { flex: 1, paddingVertical: 12, justifyContent: 'center' },
+  goalCard:       { marginTop: 8, marginBottom: 0, paddingVertical: 8 },
+  dailyCard:      { marginTop: 8, marginBottom: 0, paddingVertical: 8 },
   dailyDays:      { fontSize: 11, marginLeft: 'auto' },
   goalCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12 },
   goalCardTitle:  { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },

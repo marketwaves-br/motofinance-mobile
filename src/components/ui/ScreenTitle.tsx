@@ -28,7 +28,7 @@ export function ScreenTitle({ title, rightContent }: ScreenTitleProps) {
           borderBottomColor: colors.border,
           paddingTop: insets.top + 8,
           paddingHorizontal: spacing.lg,
-          paddingBottom: 10,
+          paddingBottom: 6,
         },
       ]}
     >

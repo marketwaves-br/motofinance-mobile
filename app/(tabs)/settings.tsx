@@ -144,7 +144,7 @@ export default function SettingsScreen() {
       <ScreenTitle title="Ajustes" />
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: spacing.lg, paddingTop: 12, paddingBottom: 100 }}
       >
 
       {/* ── Perfil ────────────────────────────────────────────── */}

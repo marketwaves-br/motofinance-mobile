@@ -417,7 +417,7 @@ export default function ReportsScreen() {
 
       {/* ── Content ─────────────────────────────────────────────────────────── */}
       <ScrollView
-        contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: spacing.lg, paddingTop: 12, paddingBottom: 100 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }

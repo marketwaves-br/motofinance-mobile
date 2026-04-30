@@ -868,7 +868,7 @@ export default function EntriesScreen() {
 
 const styles = StyleSheet.create({
   container:   { flex: 1 },
-  header:      { paddingTop: 12, paddingBottom: 16 },
+  header:      { paddingTop: 6, paddingBottom: 16 },
 
   searchBar: {
     flexDirection: 'row',

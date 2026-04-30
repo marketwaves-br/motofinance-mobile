@@ -201,7 +201,7 @@ export default function AddExpenseModal() {
           render={({ field: { value, onChange } }) => (
             <AppInput
               label="Observação (opcional)"
-              placeholder="Ex: Manutenção preventiva, pneu furado..."
+              placeholder="Ex: Manutenção preventiva"
               value={value ?? ''}
               onChangeText={onChange}
               onFocus={handleAmountFocus}
