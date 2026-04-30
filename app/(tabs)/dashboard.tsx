@@ -28,7 +28,7 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScreenTitle title="MotoFinance" />
+      <ScreenTitle brandTitle />
       <ScrollView
         testID="dashboard-scroll"
         style={{ flex: 1 }}
