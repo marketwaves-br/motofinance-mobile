@@ -4,7 +4,7 @@
     "slug": "motofinance-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/brand/icon.png",
     "scheme": "motofinancemobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -13,10 +13,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#0D183D",
+        "foregroundImage": "./assets/brand/android-icon-foreground.png",
+        "backgroundImage": "./assets/brand/android-icon-background.png",
+        "monochromeImage": "./assets/brand/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -30,12 +30,11 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "image": "./assets/brand/splash-screen.png",
+          "resizeMode": "cover",
+          "backgroundColor": "#070D28",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#070D28"
           }
         }
       ],
