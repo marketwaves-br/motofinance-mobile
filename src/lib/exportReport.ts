@@ -139,18 +139,18 @@ export const generatePDFHtml = (data: ExportData): string => {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; background: #fff; padding: 32px; font-size: 13px; }
 
-    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #10B981; }
-    .logo { font-size: 22px; font-weight: 800; color: #10B981; letter-spacing: -0.5px; }
-    .logo span { color: #1e293b; }
-    .meta { text-align: right; color: #64748b; font-size: 11px; line-height: 1.6; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #1677FF; }
+    .logo { font-size: 22px; font-weight: 800; color: #0D183D; letter-spacing: -0.5px; }
+    .logo span { color: #1677FF; }
+    .meta { text-align: right; color: #6B7280; font-size: 11px; line-height: 1.6; }
 
     .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
-    .summary-card { padding: 16px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; text-align: center; }
-    .summary-card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 6px; }
+    .summary-card { padding: 16px; border-radius: 10px; background: #f8fafc; border: 1px solid #E5E7EB; text-align: center; }
+    .summary-card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #6B7280; margin-bottom: 6px; }
     .summary-card .value { font-size: 20px; font-weight: 800; }
-    .positive { color: #10B981; }
+    .positive { color: #1677FF; }
     .negative { color: #F43F5E; }
-    .neutral  { color: #3B82F6; }
+    .neutral  { color: #1677FF; }
 
     h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin: 20px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; }
 
@@ -167,8 +167,8 @@ export const generatePDFHtml = (data: ExportData): string => {
 
   <div class="header">
     <div>
-      <div class="logo">Moto<span>Finance</span></div>
-      <div style="color:#64748b;font-size:11px;margin-top:4px;">Controle Financeiro do Motorista</div>
+      <div class="logo">moto<span>finance</span></div>
+      <div style="color:#6B7280;font-size:11px;margin-top:4px;">Suas finanças na direção certa</div>
       ${data.userName ? `<div style="color:#1e293b;font-size:12px;margin-top:6px;font-weight:600;">Motorista: ${data.userName}</div>` : ''}
     </div>
     <div class="meta">
@@ -213,7 +213,7 @@ export const generatePDFHtml = (data: ExportData): string => {
     <tbody>${dailyRows}</tbody>
   </table>` : ''}
 
-  <div class="footer">MotoFinance · Relatório gerado em ${data.generatedAt}</div>
+  <div class="footer">motofinance · Relatório gerado em ${data.generatedAt}</div>
 
 </body>
 </html>`;
