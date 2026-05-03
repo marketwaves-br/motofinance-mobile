@@ -5,10 +5,12 @@ import { AppButton } from '@/components/ui/AppButton';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 
-const brandIcon = require('../../assets/brand/icon.png');
+const brandIconDark  = require('../../assets/brand/icon.png');
+const brandIconLight = require('../../assets/brand/icon-azul.png');
 
 export default function WelcomeScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const brandIcon = isDark ? brandIconDark : brandIconLight;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
