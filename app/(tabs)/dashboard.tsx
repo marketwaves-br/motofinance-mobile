@@ -82,6 +82,27 @@ export default function DashboardScreen() {
         </AppCard>
       </View>
 
+      {/* ── Botões de lançamento ──────────────────────────────── */}
+      <View style={[styles.actionRow, { marginTop: 8 }]}>
+        <AppButton
+          testID="btn-add-income"
+          title="Nova Receita"
+          icon={<Ionicons name="add-circle" size={22} color="#fff" />}
+          size="lg"
+          style={styles.actionBtn}
+          onPress={() => router.push('/(modals)/add-income')}
+        />
+        <AppButton
+          testID="btn-add-expense"
+          title="Nova Despesa"
+          variant="danger"
+          icon={<Ionicons name="remove-circle" size={22} color="#fff" />}
+          size="lg"
+          style={styles.actionBtn}
+          onPress={() => router.push('/(modals)/add-expense')}
+        />
+      </View>
+
       {/* ── Meta do Mês ───────────────────────────────────────── */}
       {(goals.income !== null || goals.net !== null) && (() => {
         const rows: Array<{ label: string; current: number; goal: number }> = [];
@@ -158,26 +179,6 @@ export default function DashboardScreen() {
         );
       })()}
 
-      {/* ── Botões de lançamento ──────────────────────────────── */}
-      <View style={[styles.actionRow, { marginTop: 8 }]}>
-        <AppButton
-          testID="btn-add-income"
-          title="Nova Receita"
-          icon={<Ionicons name="add-circle" size={22} color="#fff" />}
-          size="lg"
-          style={styles.actionBtn}
-          onPress={() => router.push('/(modals)/add-income')}
-        />
-        <AppButton
-          testID="btn-add-expense"
-          title="Nova Despesa"
-          variant="danger"
-          icon={<Ionicons name="remove-circle" size={22} color="#fff" />}
-          size="lg"
-          style={styles.actionBtn}
-          onPress={() => router.push('/(modals)/add-expense')}
-        />
-      </View>
       </ScrollView>
     </View>
   );
