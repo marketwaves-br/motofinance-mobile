@@ -88,11 +88,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   title: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: 'bold',
   },
   logoText: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: 'bold',
     letterSpacing: -0.3,
   },
